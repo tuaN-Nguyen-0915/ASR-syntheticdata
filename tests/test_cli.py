@@ -202,6 +202,23 @@ def test_format_tree_lists_files_under_directory(tmp_path):
     assert lines[2] == "    assistant.txt"
 
 
+def test_run_limit_zero_processes_every_row(tmp_path, monkeypatch):
+    fake_dataset = Dataset.from_list(
+        [_fake_row(f"row-{i}", "Bong gân cổ chân") for i in range(12)]
+    )
+
+    def fake_load_dataset(repo_id, config_name, streaming=False):
+        return {"train": fake_dataset}
+
+    monkeypatch.setattr(download_meddies, "load_dataset", fake_load_dataset)
+
+    summary = download_meddies.run(
+        configs=["vietnamese"], limit=0, output_root=tmp_path
+    )
+
+    assert summary["vietnamese"] == {"processed": 12, "skipped": 0, "warnings": 0}
+
+
 def test_build_arg_parser_defaults():
     parser = download_meddies.build_arg_parser()
     args = parser.parse_args([])

@@ -76,7 +76,7 @@ def run(configs: list[str], limit: int, output_root: Path) -> dict:
             dataset = load_dataset(
                 "Meddies/meddies-consultant", config, streaming=False
             )["train"]
-            n = min(limit, len(dataset))
+            n = len(dataset) if limit == 0 else min(limit, len(dataset))
             for row in dataset.select(range(n)):
                 status = processor.process_row(
                     dict(row), config, lambda line, c=counts: log_fn(line, c)
