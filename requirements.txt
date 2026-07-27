@@ -1,2 +1,2 @@
-datasets
-pytest
+datasets>=2.14
+pytest>=7.0

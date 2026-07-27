@@ -1,3 +1,4 @@
+import pytest
 from datasets import Dataset
 
 import download_meddies
@@ -158,15 +159,47 @@ def test_run_refuses_to_reprocess_config_with_existing_data(
     assert "already contains data" in captured.err
 
 
+def test_run_with_no_configs_writes_nothing(tmp_path):
+    summary = download_meddies.run(configs=[], limit=10, output_root=tmp_path)
+
+    assert summary["first_written_conv_dir"] is None
+    assert summary["refused_configs"] == []
+
+
+def test_run_deduplicates_repeated_config_names(tmp_path, monkeypatch):
+    call_count = {"n": 0}
+    fake_dataset = Dataset.from_list([_fake_row("row-1", "Bong gân cổ chân")])
+
+    def fake_load_dataset(repo_id, config_name, streaming=False):
+        call_count["n"] += 1
+        return {"train": fake_dataset}
+
+    monkeypatch.setattr(download_meddies, "load_dataset", fake_load_dataset)
+
+    summary = download_meddies.run(
+        configs=["vietnamese", "vietnamese"], limit=10, output_root=tmp_path
+    )
+
+    assert call_count["n"] == 1
+    assert list(summary.keys()) == ["vietnamese", "first_written_conv_dir", "refused_configs"]
+
+
+def test_run_rejects_config_name_containing_path_separator(tmp_path):
+    with pytest.raises(ValueError, match="invalid --configs"):
+        download_meddies.run(configs=["../escape"], limit=10, output_root=tmp_path)
+
+
 def test_format_tree_lists_files_under_directory(tmp_path):
     conv_dir = tmp_path / "conv_0001"
     (conv_dir / "Turn1").mkdir(parents=True)
     (conv_dir / "Turn1" / "assistant.txt").write_text("hi", encoding="utf-8")
 
     tree = download_meddies.format_tree(conv_dir)
+    lines = tree.splitlines()
 
-    assert "Turn1" in tree
-    assert "assistant.txt" in tree
+    assert lines[0] == "conv_0001"
+    assert lines[1] == "  Turn1"
+    assert lines[2] == "    assistant.txt"
 
 
 def test_build_arg_parser_defaults():

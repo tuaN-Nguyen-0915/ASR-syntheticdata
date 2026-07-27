@@ -4,6 +4,7 @@ from .think_strip import strip_think_block
 
 
 def get_next_conv_number(disease_dir: Path) -> int:
+    """Next unused conv_NNNN number for disease_dir, based on the highest existing suffix (not a count, so non-contiguous folders don't collide)."""
     if not disease_dir.exists():
         return 1
     existing_numbers = [
@@ -17,6 +18,7 @@ def get_next_conv_number(disease_dir: Path) -> int:
 
 
 def write_disease_name_file(disease_dir: Path, original_name: str) -> None:
+    """Records original_name in disease_dir/_disease_name.txt, one line per distinct name (idempotent — a name already present is not duplicated)."""
     disease_dir.mkdir(parents=True, exist_ok=True)
     name_file = disease_dir / "_disease_name.txt"
     if not name_file.exists():
@@ -36,6 +38,7 @@ def write_conversation(
     conv_number: int,
     pairs: list[tuple[dict, dict | None]],
 ) -> tuple[Path, list[str]]:
+    """Writes each (assistant, user) pair to disease_dir/conv_NNNN/TurnM/{assistant.txt,user.txt} (user.txt omitted for a trailing unpaired assistant turn). Returns the conv dir and any think-tag warnings."""
     conv_dir = disease_dir / f"conv_{conv_number:04d}"
     warnings: list[str] = []
 
