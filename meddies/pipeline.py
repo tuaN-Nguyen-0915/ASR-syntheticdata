@@ -5,6 +5,9 @@ from .pairing import pair_turns
 from .slugify import slugify_disease
 from .writer import get_next_conv_number, write_conversation, write_disease_name_file
 
+STATUS_WRITTEN = "written"
+STATUS_SKIPPED = "skipped"
+
 
 class MeddiesProcessor:
     def __init__(self, output_root: Path):
@@ -19,6 +22,8 @@ class MeddiesProcessor:
 
         try:
             pairs = pair_turns(row["messages"])
+            if not pairs:
+                raise ValueError("empty conversation: no messages to write")
 
             original_disease_name = row.get("target_disease") or ""
             disease_slug = slugify_disease(original_disease_name)
@@ -34,10 +39,10 @@ class MeddiesProcessor:
             conv_dir, warnings = write_conversation(disease_dir, conv_number, pairs)
         except (ValueError, KeyError, TypeError, AttributeError) as exc:
             log_fn(f"{config}\t{row_id}\tSKIPPED\t{exc}")
-            return "skipped"
+            return STATUS_SKIPPED
 
         if self.first_written_conv_dir is None:
             self.first_written_conv_dir = conv_dir
         for warning in warnings:
             log_fn(f"{config}\t{row_id}\tWARNING\t{warning}")
-        return "written"
+        return STATUS_WRITTEN

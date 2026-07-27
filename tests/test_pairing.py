@@ -47,3 +47,18 @@ def test_two_assistants_in_a_row_raises_value_error():
     ]
     with pytest.raises(ValueError, match="index 1"):
         pair_turns(messages)
+
+
+def test_single_message_conversation_has_trailing_unpaired_assistant():
+    messages = [_msg("assistant", "a1")]
+    assert pair_turns(messages) == [(messages[0], None)]
+
+
+def test_role_violation_in_the_middle_of_a_long_conversation_raises():
+    messages = [
+        _msg("assistant", "a1"), _msg("user", "u1"),
+        _msg("assistant", "a2"), _msg("user", "u2"),
+        _msg("user", "u3"), _msg("assistant", "a3"),
+    ]
+    with pytest.raises(ValueError, match="index 4"):
+        pair_turns(messages)

@@ -75,6 +75,48 @@ def test_first_written_conv_dir_is_set_once_and_not_overwritten(tmp_path):
     assert processor.first_written_conv_dir == first_dir
 
 
+def test_first_written_conv_dir_stays_pinned_across_different_diseases_and_configs(tmp_path):
+    processor = MeddiesProcessor(tmp_path)
+    logs = []
+    row1 = _row("row-1", [_msg("assistant", "a1"), _msg("user", "u1")], target_disease="Disease A")
+    row2 = _row("row-2", [_msg("assistant", "a2"), _msg("user", "u2")], target_disease="Disease B")
+
+    processor.process_row(row1, "vietnamese", logs.append)
+    first_dir = processor.first_written_conv_dir
+    assert first_dir == tmp_path / "vietnamese" / "disease_a" / "conv_0001"
+
+    processor.process_row(row2, "english", logs.append)
+    assert processor.first_written_conv_dir == first_dir
+
+
+def test_conv_counter_is_isolated_per_config_for_same_disease_slug(tmp_path):
+    processor = MeddiesProcessor(tmp_path)
+    logs = []
+    row_vi = _row("row-vi", [_msg("assistant", "a1"), _msg("user", "u1")])
+    row_en = _row("row-en", [_msg("assistant", "a2"), _msg("user", "u2")])
+
+    processor.process_row(row_vi, "vietnamese", logs.append)
+    processor.process_row(row_en, "english", logs.append)
+
+    assert (tmp_path / "vietnamese" / "bong_gan_co_chan" / "conv_0001").exists()
+    assert (tmp_path / "english" / "bong_gan_co_chan" / "conv_0001").exists()
+
+
+def test_process_row_skips_and_logs_when_messages_is_empty(tmp_path):
+    processor = MeddiesProcessor(tmp_path)
+    logs = []
+    row = _row("row-empty", [])
+
+    status = processor.process_row(row, "vietnamese", logs.append)
+
+    assert status == "skipped"
+    assert not (tmp_path / "vietnamese").exists()
+    assert processor.first_written_conv_dir is None
+    assert len(logs) == 1
+    assert "row-empty" in logs[0]
+    assert "SKIPPED" in logs[0]
+
+
 def test_process_row_skips_and_logs_when_messages_key_missing(tmp_path):
     processor = MeddiesProcessor(tmp_path)
     logs = []

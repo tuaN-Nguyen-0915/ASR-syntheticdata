@@ -4,7 +4,7 @@ from pathlib import Path
 
 from datasets import load_dataset
 
-from meddies.pipeline import MeddiesProcessor
+from meddies.pipeline import STATUS_WRITTEN, MeddiesProcessor
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -12,29 +12,57 @@ def build_arg_parser() -> argparse.ArgumentParser:
         description="Download and restructure Meddies consultation transcripts."
     )
     parser.add_argument(
-        "--configs", nargs="+", default=["vietnamese", "english"]
+        "--configs", nargs="+", default=["vietnamese", "english"],
+        help="dataset configs to process (default: vietnamese english)",
     )
-    parser.add_argument("--limit", type=int, default=100)
-    parser.add_argument("--output", type=Path, default=Path("output"))
+    parser.add_argument(
+        "--limit", type=int, default=100,
+        help="rows per config to process; 0 means process every row (default: 100)",
+    )
+    parser.add_argument(
+        "--output", type=Path, default=Path("output"),
+        help="output directory (default: output/)",
+    )
     return parser
+
+
+def _validate_config_name(config: str) -> None:
+    if not config or "/" in config or "\\" in config or config in (".", ".."):
+        raise ValueError(
+            f"invalid --configs value {config!r}: must be a plain dataset "
+            "config name, not a path"
+        )
 
 
 def format_tree(root: Path) -> str:
     lines = [root.name]
     for path in sorted(root.rglob("*")):
-        depth = len(path.relative_to(root).parts) - 1
+        depth = len(path.relative_to(root).parts)
         lines.append("  " * depth + path.name)
     return "\n".join(lines)
 
 
 def run(configs: list[str], limit: int, output_root: Path) -> dict:
+    configs = list(dict.fromkeys(configs))  # de-dupe, preserve order
+    for config in configs:
+        _validate_config_name(config)
+
     output_root.mkdir(parents=True, exist_ok=True)
     log_path = output_root / "skipped_rows.log"
     processor = MeddiesProcessor(output_root)
     summary: dict = {}
     refused_configs: list[str] = []
+    log_file = None
 
-    with log_path.open("a", encoding="utf-8") as log_file:
+    def log_fn(line: str, counts: dict) -> None:
+        nonlocal log_file
+        if log_file is None:
+            log_file = log_path.open("a", encoding="utf-8")
+        log_file.write(line + "\n")
+        if "\tWARNING\t" in line:
+            counts["warnings"] += 1
+
+    try:
         for config in configs:
             config_dir = output_root / config
             if config_dir.exists() and any(
@@ -52,22 +80,24 @@ def run(configs: list[str], limit: int, output_root: Path) -> dict:
 
             counts = {"processed": 0, "skipped": 0, "warnings": 0}
 
-            def log_fn(line: str, counts=counts) -> None:
-                log_file.write(line + "\n")
-                if "\tWARNING\t" in line:
-                    counts["warnings"] += 1
-
             dataset = load_dataset(
                 "Meddies/meddies-consultant", config, streaming=False
             )["train"]
-            n = min(limit, len(dataset))
-            for row in dataset.select(range(n)):
-                status = processor.process_row(dict(row), config, log_fn)
-                if status == "written":
+            n = len(dataset) if limit == 0 else min(limit, len(dataset))
+            for i, row in enumerate(dataset.select(range(n)), start=1):
+                status = processor.process_row(
+                    dict(row), config, lambda line, c=counts: log_fn(line, c)
+                )
+                if status == STATUS_WRITTEN:
                     counts["processed"] += 1
                 else:
                     counts["skipped"] += 1
+                if i % 5000 == 0:
+                    print(f"{config}: {i}/{n} rows iterated...", flush=True)
             summary[config] = counts
+    finally:
+        if log_file is not None:
+            log_file.close()
 
     summary["first_written_conv_dir"] = processor.first_written_conv_dir
     summary["refused_configs"] = refused_configs
@@ -77,13 +107,21 @@ def run(configs: list[str], limit: int, output_root: Path) -> dict:
 def main() -> None:
     args = build_arg_parser().parse_args()
     summary = run(args.configs, args.limit, args.output)
-    for config in args.configs:
+    total_processed = 0
+    total_skipped = 0
+    for config in dict.fromkeys(args.configs):
         stats = summary[config]
+        total_processed += stats["processed"]
+        total_skipped += stats["skipped"]
         print(
             f"{config}: processed {stats['processed']} rows, "
             f"skipped {stats['skipped']}, warnings {stats['warnings']}"
         )
+    print(f"Total conversations written: {total_processed}")
     print(f"Output written to: {args.output.resolve()}")
+
+    if total_skipped or any(summary[c]["warnings"] for c in dict.fromkeys(args.configs)):
+        print(f"See {args.output / 'skipped_rows.log'} for skip/warning details.")
 
     refused_configs = summary.get("refused_configs", [])
     if refused_configs:

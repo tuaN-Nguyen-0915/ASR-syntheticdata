@@ -28,6 +28,14 @@ def test_get_next_conv_number_handles_non_contiguous_dirs(tmp_path):
     assert get_next_conv_number(disease_dir) == 4
 
 
+def test_get_next_conv_number_ignores_stray_non_directory_conv_named_file(tmp_path):
+    disease_dir = tmp_path / "some_disease"
+    disease_dir.mkdir(parents=True)
+    (disease_dir / "conv_0001").mkdir()
+    (disease_dir / "conv_0002.txt").write_text("not a directory", encoding="utf-8")
+    assert get_next_conv_number(disease_dir) == 2
+
+
 def test_write_disease_name_file_creates_file_with_name(tmp_path):
     disease_dir = tmp_path / "some_disease"
     write_disease_name_file(disease_dir, "Bong gân cổ chân")
