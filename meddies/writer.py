@@ -6,10 +6,14 @@ from .think_strip import strip_think_block
 def get_next_conv_number(disease_dir: Path) -> int:
     if not disease_dir.exists():
         return 1
-    existing = [
-        p for p in disease_dir.iterdir() if p.is_dir() and p.name.startswith("conv_")
+    existing_numbers = [
+        int(p.name.removeprefix("conv_"))
+        for p in disease_dir.iterdir()
+        if p.is_dir()
+        and p.name.startswith("conv_")
+        and p.name.removeprefix("conv_").isdigit()
     ]
-    return len(existing) + 1
+    return max(existing_numbers, default=0) + 1
 
 
 def write_disease_name_file(disease_dir: Path, original_name: str) -> None:

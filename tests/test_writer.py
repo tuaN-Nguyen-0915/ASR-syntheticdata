@@ -21,6 +21,13 @@ def test_get_next_conv_number_counts_existing_conv_dirs(tmp_path):
     assert get_next_conv_number(disease_dir) == 3
 
 
+def test_get_next_conv_number_handles_non_contiguous_dirs(tmp_path):
+    disease_dir = tmp_path / "some_disease"
+    (disease_dir / "conv_0001").mkdir(parents=True)
+    (disease_dir / "conv_0003").mkdir(parents=True)
+    assert get_next_conv_number(disease_dir) == 4
+
+
 def test_write_disease_name_file_creates_file_once(tmp_path):
     disease_dir = tmp_path / "some_disease"
     write_disease_name_file(disease_dir, "Bong gân cổ chân")
