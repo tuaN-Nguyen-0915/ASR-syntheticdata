@@ -1,4 +1,5 @@
 import argparse
+import sys
 from pathlib import Path
 
 from datasets import load_dataset
@@ -31,9 +32,24 @@ def run(configs: list[str], limit: int, output_root: Path) -> dict:
     log_path = output_root / "skipped_rows.log"
     processor = MeddiesProcessor(output_root)
     summary: dict = {}
+    refused_configs: list[str] = []
 
     with log_path.open("a", encoding="utf-8") as log_file:
         for config in configs:
+            config_dir = output_root / config
+            if config_dir.exists() and any(
+                p.is_dir() for p in config_dir.iterdir()
+            ):
+                print(
+                    f"Error: {config_dir} already contains data; refusing to "
+                    "reprocess (would duplicate conversations). Remove it or "
+                    "use a different --output to proceed.",
+                    file=sys.stderr,
+                )
+                refused_configs.append(config)
+                summary[config] = {"processed": 0, "skipped": 0, "warnings": 0}
+                continue
+
             counts = {"processed": 0, "skipped": 0, "warnings": 0}
 
             def log_fn(line: str, counts=counts) -> None:
@@ -54,6 +70,7 @@ def run(configs: list[str], limit: int, output_root: Path) -> dict:
             summary[config] = counts
 
     summary["first_written_conv_dir"] = processor.first_written_conv_dir
+    summary["refused_configs"] = refused_configs
     return summary
 
 
@@ -67,6 +84,13 @@ def main() -> None:
             f"skipped {stats['skipped']}, warnings {stats['warnings']}"
         )
     print(f"Output written to: {args.output.resolve()}")
+
+    refused_configs = summary.get("refused_configs", [])
+    if refused_configs:
+        print(
+            "\nRefused to reprocess (output already contains data): "
+            + ", ".join(refused_configs)
+        )
 
     first_conv_dir = summary["first_written_conv_dir"]
     if first_conv_dir is not None:

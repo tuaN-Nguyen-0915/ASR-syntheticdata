@@ -19,22 +19,23 @@ class MeddiesProcessor:
 
         try:
             pairs = pair_turns(row["messages"])
-        except ValueError as exc:
+
+            original_disease_name = row.get("target_disease") or ""
+            disease_slug = slugify_disease(original_disease_name)
+            disease_dir = self.output_root / config / disease_slug
+            write_disease_name_file(disease_dir, original_disease_name)
+
+            counter_key = (config, disease_slug)
+            if counter_key not in self._conv_counters:
+                self._conv_counters[counter_key] = get_next_conv_number(disease_dir)
+            conv_number = self._conv_counters[counter_key]
+            self._conv_counters[counter_key] += 1
+
+            conv_dir, warnings = write_conversation(disease_dir, conv_number, pairs)
+        except (ValueError, KeyError, TypeError) as exc:
             log_fn(f"{config}\t{row_id}\tSKIPPED\t{exc}")
             return "skipped"
 
-        original_disease_name = row.get("target_disease") or ""
-        disease_slug = slugify_disease(original_disease_name)
-        disease_dir = self.output_root / config / disease_slug
-        write_disease_name_file(disease_dir, original_disease_name)
-
-        counter_key = (config, disease_slug)
-        if counter_key not in self._conv_counters:
-            self._conv_counters[counter_key] = get_next_conv_number(disease_dir)
-        conv_number = self._conv_counters[counter_key]
-        self._conv_counters[counter_key] += 1
-
-        conv_dir, warnings = write_conversation(disease_dir, conv_number, pairs)
         if self.first_written_conv_dir is None:
             self.first_written_conv_dir = conv_dir
         for warning in warnings:

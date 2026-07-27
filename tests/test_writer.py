@@ -28,14 +28,34 @@ def test_get_next_conv_number_handles_non_contiguous_dirs(tmp_path):
     assert get_next_conv_number(disease_dir) == 4
 
 
-def test_write_disease_name_file_creates_file_once(tmp_path):
+def test_write_disease_name_file_creates_file_with_name(tmp_path):
     disease_dir = tmp_path / "some_disease"
     write_disease_name_file(disease_dir, "Bong gân cổ chân")
     name_file = disease_dir / "_disease_name.txt"
     assert name_file.read_text(encoding="utf-8") == "Bong gân cổ chân"
 
-    write_disease_name_file(disease_dir, "should not overwrite")
-    assert name_file.read_text(encoding="utf-8") == "Bong gân cổ chân"
+
+def test_write_disease_name_file_is_idempotent_for_same_name(tmp_path):
+    disease_dir = tmp_path / "some_disease"
+    name_file = disease_dir / "_disease_name.txt"
+
+    write_disease_name_file(disease_dir, "Bong gân cổ chân")
+    write_disease_name_file(disease_dir, "Bong gân cổ chân")
+
+    content = name_file.read_text(encoding="utf-8")
+    assert content == "Bong gân cổ chân"
+    assert content.count("Bong gân cổ chân") == 1
+
+
+def test_write_disease_name_file_appends_distinct_colliding_name(tmp_path):
+    disease_dir = tmp_path / "some_disease"
+    name_file = disease_dir / "_disease_name.txt"
+
+    write_disease_name_file(disease_dir, "Đau đầu")
+    write_disease_name_file(disease_dir, "Dau dau")
+
+    lines = name_file.read_text(encoding="utf-8").splitlines()
+    assert lines == ["Đau đầu", "Dau dau"]
 
 
 def test_write_conversation_creates_turn_folders_with_files(tmp_path):

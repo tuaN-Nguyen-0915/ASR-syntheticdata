@@ -75,6 +75,65 @@ def test_first_written_conv_dir_is_set_once_and_not_overwritten(tmp_path):
     assert processor.first_written_conv_dir == first_dir
 
 
+def test_process_row_skips_and_logs_when_messages_key_missing(tmp_path):
+    processor = MeddiesProcessor(tmp_path)
+    logs = []
+    row = {
+        "id": "row-no-messages",
+        "target_disease": "Bong gân cổ chân",
+        "turns_count": 0,
+        "patient_persona": "unused",
+    }
+
+    status = processor.process_row(row, "vietnamese", logs.append)
+
+    assert status == "skipped"
+    assert not (tmp_path / "vietnamese").exists()
+    assert len(logs) == 1
+    assert "row-no-messages" in logs[0]
+    assert "SKIPPED" in logs[0]
+
+
+def test_process_row_skips_and_logs_when_messages_is_none(tmp_path):
+    processor = MeddiesProcessor(tmp_path)
+    logs = []
+    row = {
+        "id": "row-none-messages",
+        "messages": None,
+        "target_disease": "Bong gân cổ chân",
+        "turns_count": 0,
+        "patient_persona": "unused",
+    }
+
+    status = processor.process_row(row, "vietnamese", logs.append)
+
+    assert status == "skipped"
+    assert not (tmp_path / "vietnamese").exists()
+    assert len(logs) == 1
+    assert "row-none-messages" in logs[0]
+    assert "SKIPPED" in logs[0]
+
+
+def test_process_row_skips_and_logs_when_message_missing_content(tmp_path):
+    processor = MeddiesProcessor(tmp_path)
+    logs = []
+    row = _row(
+        "row-no-content",
+        [{"role": "assistant"}, _msg("user", "Hi")],
+    )
+
+    status = processor.process_row(row, "vietnamese", logs.append)
+
+    assert status == "skipped"
+    disease_dir = tmp_path / "vietnamese" / "bong_gan_co_chan"
+    # A crash mid-write may leave a partial Turn1 dir behind, but no
+    # completed conversation output (assistant.txt) should exist.
+    assert not (disease_dir / "conv_0001" / "Turn1" / "assistant.txt").exists()
+    assert len(logs) == 1
+    assert "row-no-content" in logs[0]
+    assert "SKIPPED" in logs[0]
+
+
 def test_process_row_logs_think_tag_warning_without_skipping(tmp_path):
     processor = MeddiesProcessor(tmp_path)
     logs = []

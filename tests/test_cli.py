@@ -92,6 +92,72 @@ def test_run_counts_skipped_and_warning_rows(tmp_path, monkeypatch):
     assert (tmp_path / "skipped_rows.log").exists()
 
 
+def test_run_processes_multiple_configs_independently(tmp_path, monkeypatch):
+    dataset_a = Dataset.from_list([_fake_row("row-a1", "Bong gân cổ chân")])
+    dataset_b = Dataset.from_list(
+        [
+            _fake_row("row-b1", "Bong gân cổ chân"),
+            _fake_row("row-b2", "Bong gân cổ chân"),
+        ]
+    )
+    datasets_by_config = {"config_a": dataset_a, "config_b": dataset_b}
+
+    def fake_load_dataset(repo_id, config_name, streaming=False):
+        assert repo_id == "Meddies/meddies-consultant"
+        return {"train": datasets_by_config[config_name]}
+
+    monkeypatch.setattr(download_meddies, "load_dataset", fake_load_dataset)
+
+    summary = download_meddies.run(
+        configs=["config_a", "config_b"], limit=10, output_root=tmp_path
+    )
+
+    assert summary["config_a"] == {"processed": 1, "skipped": 0, "warnings": 0}
+    assert summary["config_b"] == {"processed": 2, "skipped": 0, "warnings": 0}
+
+    disease_slug = "bong_gan_co_chan"
+    disease_dir_a = tmp_path / "config_a" / disease_slug
+    disease_dir_b = tmp_path / "config_b" / disease_slug
+    assert (disease_dir_a / "conv_0001").exists()
+    assert (disease_dir_b / "conv_0001").exists()
+    assert (disease_dir_b / "conv_0002").exists()
+
+    # The counter must not leak across configs: config_b's first conv is
+    # still conv_0001, not conv_0002 continuing from config_a.
+    assert summary["first_written_conv_dir"] == disease_dir_a / "conv_0001"
+
+
+def test_run_refuses_to_reprocess_config_with_existing_data(
+    tmp_path, monkeypatch, capsys
+):
+    call_count = {"n": 0}
+    fake_dataset = Dataset.from_list([_fake_row("row-1", "Bong gân cổ chân")])
+
+    def fake_load_dataset(repo_id, config_name, streaming=False):
+        call_count["n"] += 1
+        return {"train": fake_dataset}
+
+    monkeypatch.setattr(download_meddies, "load_dataset", fake_load_dataset)
+
+    download_meddies.run(configs=["vietnamese"], limit=10, output_root=tmp_path)
+    disease_dir = tmp_path / "vietnamese" / "bong_gan_co_chan"
+    assert (disease_dir / "conv_0001").exists()
+    assert call_count["n"] == 1
+
+    summary = download_meddies.run(
+        configs=["vietnamese"], limit=10, output_root=tmp_path
+    )
+
+    # No second call to load_dataset, and no new conversation created.
+    assert call_count["n"] == 1
+    assert not (disease_dir / "conv_0002").exists()
+    assert summary["vietnamese"] == {"processed": 0, "skipped": 0, "warnings": 0}
+    assert summary["refused_configs"] == ["vietnamese"]
+
+    captured = capsys.readouterr()
+    assert "already contains data" in captured.err
+
+
 def test_format_tree_lists_files_under_directory(tmp_path):
     conv_dir = tmp_path / "conv_0001"
     (conv_dir / "Turn1").mkdir(parents=True)

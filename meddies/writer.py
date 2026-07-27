@@ -21,6 +21,14 @@ def write_disease_name_file(disease_dir: Path, original_name: str) -> None:
     name_file = disease_dir / "_disease_name.txt"
     if not name_file.exists():
         name_file.write_text(original_name, encoding="utf-8")
+        return
+
+    existing_names = name_file.read_text(encoding="utf-8").splitlines()
+    if original_name in existing_names:
+        return
+
+    with name_file.open("a", encoding="utf-8") as f:
+        f.write("\n" + original_name)
 
 
 def write_conversation(
