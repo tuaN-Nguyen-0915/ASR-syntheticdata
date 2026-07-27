@@ -77,7 +77,7 @@ def run(configs: list[str], limit: int, output_root: Path) -> dict:
                 "Meddies/meddies-consultant", config, streaming=False
             )["train"]
             n = len(dataset) if limit == 0 else min(limit, len(dataset))
-            for row in dataset.select(range(n)):
+            for i, row in enumerate(dataset.select(range(n)), start=1):
                 status = processor.process_row(
                     dict(row), config, lambda line, c=counts: log_fn(line, c)
                 )
@@ -85,6 +85,8 @@ def run(configs: list[str], limit: int, output_root: Path) -> dict:
                     counts["processed"] += 1
                 else:
                     counts["skipped"] += 1
+                if i % 5000 == 0:
+                    print(f"{config}: {i}/{n} rows iterated...")
             summary[config] = counts
     finally:
         if log_file is not None:

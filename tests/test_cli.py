@@ -219,6 +219,25 @@ def test_run_limit_zero_processes_every_row(tmp_path, monkeypatch):
     assert summary["vietnamese"] == {"processed": 12, "skipped": 0, "warnings": 0}
 
 
+def test_run_prints_progress_every_5000_rows(tmp_path, monkeypatch, capsys):
+    fake_dataset = Dataset.from_list(
+        [_fake_row(f"row-{i}", "Bong gân cổ chân") for i in range(10001)]
+    )
+
+    def fake_load_dataset(repo_id, config_name, streaming=False):
+        return {"train": fake_dataset}
+
+    monkeypatch.setattr(download_meddies, "load_dataset", fake_load_dataset)
+
+    download_meddies.run(configs=["vietnamese"], limit=10001, output_root=tmp_path)
+
+    captured = capsys.readouterr()
+    assert "vietnamese: 5000/10001 rows iterated" in captured.out
+    assert "vietnamese: 10000/10001 rows iterated" in captured.out
+    # No boundary at 10001 itself — only exact multiples of 5000 fire.
+    assert "vietnamese: 10001/10001 rows iterated" not in captured.out
+
+
 def test_build_arg_parser_defaults():
     parser = download_meddies.build_arg_parser()
     args = parser.parse_args([])
