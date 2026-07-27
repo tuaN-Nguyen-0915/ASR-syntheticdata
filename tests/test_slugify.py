@@ -23,3 +23,7 @@ def test_whitespace_only_returns_unknown_disease():
 
 def test_symbols_only_returns_unknown_disease():
     assert slugify_disease("!!!") == "unknown_disease"
+
+
+def test_transliterates_dd_stroke_to_d():
+    assert slugify_disease("Đái tháo đường") == "dai_thao_duong"
