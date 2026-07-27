@@ -155,3 +155,89 @@ On completion, print a summary:
 _(Append new dated feature sections below this line as they're designed.
 Do not renumber or remove completed feature sections — treat them as a
 changelog of what shipped.)_
+
+---
+
+## Feature 2 (2026-07-27): Full-scale download of vietnamese + english
+
+### Goal
+
+Process the complete `vietnamese` (58,064 rows) and `english` (109,005
+rows) configs — not just the 100-row sample — using the pipeline built for
+Feature 1 unchanged. `RandomQA` / `RandomQuestion` remain explicitly out of
+scope (see below).
+
+### Why minimal changes are enough
+
+A real throughput measurement (20,000-row run against the already-cached
+`vietnamese` config) found ~449 rows/second, extrapolating to:
+
+- **Full run time:** ~6-7 minutes total for both configs combined
+  (167,069 rows)
+- **Disk:** ~8-10 GB
+- **File count:** ~2-2.5 million files (corrected from an earlier ~4-5M
+  estimate, which double-counted `turns_count` as turn-*pairs* rather than
+  message count)
+
+At this scale — minutes, not hours — chunked/resumable batch processing
+would be solving a problem that doesn't exist: if a full run crashes,
+clearing `output/` and re-running costs a few minutes, cheaper than
+building and maintaining a resume mechanism. This feature is deliberately
+small.
+
+### Explicitly out of scope for this feature
+
+- `RandomQA` / `RandomQuestion` configs. Confirmed via the dataset's actual
+  schema (not just row counts) that these are structurally different from
+  `vietnamese`/`english`, not just "the same shape at a different size":
+  - No `target_disease` field at all — nothing to slug into a folder name.
+    `category` (e.g. `"safety"`) and `complexity` (e.g. `"hard"`) exist
+    instead.
+  - `messages` starts with `role: "user"` then `role: "assistant"` — the
+    *reverse* of `vietnamese`/`english`'s assistant-first order. The
+    existing `pair_turns` validation would reject every single row from
+    these configs as a role-order violation.
+  - Effectively single-turn Q&A (`turns_count: 2`), not multi-turn
+    consultation; `question`/`answer` fields duplicate the `messages`
+    content.
+  - These differences need their own folder-keying decision and
+    message-order handling — a dedicated design pass, not a `--limit`
+    change. Tracked as a future feature.
+- Disk-space preflight checks — 8-10 GB is modest; not worth the added
+  complexity at this scale.
+- Any new resumability/chunking mechanism — the existing
+  "refuse to reprocess a config with existing data" guard (Feature 1)
+  already governs retries, and the short runtime makes anything more
+  elaborate unnecessary for now.
+
+### Changes
+
+1. **`--limit 0` means "no cap, process every row."** `run()`'s row-count
+   logic changes from `n = min(limit, len(dataset))` to: if `limit == 0`,
+   `n = len(dataset)`; otherwise unchanged. The default stays `100` —
+   existing behavior and every existing test are unaffected unless `0` is
+   passed explicitly.
+2. **Progress reporting.** Print one line every 5,000 rows *iterated*
+   within a config — counting every row the loop reaches regardless of
+   written/skipped outcome, not just successfully-written ones — e.g.
+   `vietnamese: 5,000/58,064 rows iterated...`. Fires only at exact
+   multiples of 5,000 (row 5000, 10000, 15000, ...); the final tally for
+   a config is still the existing end-of-run summary line in `main()`,
+   not a duplicate progress line. The interval is row-count-based (not
+   wall-clock-based) — deterministic and unit-testable with a small fake
+   dataset instead of requiring a real multi-minute run.
+3. No other behavior changes. Slugification, think-stripping, turn
+   pairing, the writer, the disease-name-collision handling, and the
+   reprocess-refusal guard all apply exactly as already built and shipped.
+
+### Testing
+
+- `--limit 0` and the progress-print interval get unit tests against
+  small fake datasets (e.g. a 12-row fake dataset with `--limit 0` to
+  confirm all 12 are processed; a fake dataset sized to cross one or two
+  5,000-row boundaries to confirm the print fires at the right counts) —
+  no test needs to actually process the real 167k-row dataset.
+- The real full-scale run against the live Hugging Face dataset is the
+  manual verification step, following the same pattern as Feature 1's
+  Task 8: run it, cross-check row/file counts, spot-check output, review
+  `skipped_rows.log`.
