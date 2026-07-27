@@ -134,6 +134,35 @@ def test_process_row_skips_and_logs_when_message_missing_content(tmp_path):
     assert "SKIPPED" in logs[0]
 
 
+def test_process_row_skips_and_logs_when_content_is_none(tmp_path):
+    processor = MeddiesProcessor(tmp_path)
+    logs = []
+    row = _row(
+        "row-bad",
+        [_msg("assistant", "hi"), _msg("user", None)],
+    )
+
+    status = processor.process_row(row, "vietnamese", logs.append)
+
+    assert status == "skipped"
+    assert len(logs) == 1
+    assert "row-bad" in logs[0]
+    assert "SKIPPED" in logs[0]
+
+
+def test_process_row_skips_and_logs_when_messages_is_non_list_scalar(tmp_path):
+    processor = MeddiesProcessor(tmp_path)
+    logs = []
+    row = _row("row-bad", "not-a-list")
+
+    status = processor.process_row(row, "vietnamese", logs.append)
+
+    assert status == "skipped"
+    assert len(logs) == 1
+    assert "row-bad" in logs[0]
+    assert "SKIPPED" in logs[0]
+
+
 def test_process_row_logs_think_tag_warning_without_skipping(tmp_path):
     processor = MeddiesProcessor(tmp_path)
     logs = []

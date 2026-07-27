@@ -32,7 +32,7 @@ class MeddiesProcessor:
             self._conv_counters[counter_key] += 1
 
             conv_dir, warnings = write_conversation(disease_dir, conv_number, pairs)
-        except (ValueError, KeyError, TypeError) as exc:
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
             log_fn(f"{config}\t{row_id}\tSKIPPED\t{exc}")
             return "skipped"
 
