@@ -12,10 +12,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         description="Download and restructure Meddies consultation transcripts."
     )
     parser.add_argument(
-        "--configs", nargs="+", default=["vietnamese", "english"]
+        "--configs", nargs="+", default=["vietnamese", "english"],
+        help="dataset configs to process (default: vietnamese english)",
     )
-    parser.add_argument("--limit", type=int, default=100)
-    parser.add_argument("--output", type=Path, default=Path("output"))
+    parser.add_argument(
+        "--limit", type=int, default=100,
+        help="rows per config to process; 0 means process every row (default: 100)",
+    )
+    parser.add_argument(
+        "--output", type=Path, default=Path("output"),
+        help="output directory (default: output/)",
+    )
     return parser
 
 
@@ -86,7 +93,7 @@ def run(configs: list[str], limit: int, output_root: Path) -> dict:
                 else:
                     counts["skipped"] += 1
                 if i % 5000 == 0:
-                    print(f"{config}: {i}/{n} rows iterated...")
+                    print(f"{config}: {i}/{n} rows iterated...", flush=True)
             summary[config] = counts
     finally:
         if log_file is not None:

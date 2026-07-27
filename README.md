@@ -15,7 +15,7 @@ python download_meddies.py --configs vietnamese english --limit 100 --output out
 ```
 
 - `--configs` — space-separated dataset configs to process (default: `vietnamese english`)
-- `--limit` — rows per config (default: `100`)
+- `--limit` — rows per config to process; `0` means process every row in the config (default: `100`)
 - `--output` — output directory (default: `output/`)
 
 Non-streaming download is used deliberately: the dataset is cached locally on first run, so re-running after a crash or bug fix reads from disk instead of re-fetching over the network.
