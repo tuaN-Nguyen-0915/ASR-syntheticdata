@@ -20,6 +20,7 @@ MANIFEST_SCHEMA = pa.schema(
 )
 
 _ROLES = ("assistant", "user")
+# Matches "Turn" followed by digits; capture group (1) extracts the numeric turn number.
 _TURN_RE = re.compile(r"^Turn(\d+)$")
 
 
@@ -41,6 +42,8 @@ def iter_utterances(output_root: Path, configs: Sequence[str]) -> Iterator[dict]
         for disease_dir in sorted(p for p in config_dir.iterdir() if p.is_dir()):
             disease_name = _disease_name(disease_dir)
             for conv_dir in sorted(p for p in disease_dir.iterdir() if p.is_dir()):
+                # Collect turns as (int, path) tuples and sort by numeric turn number.
+                # This ensures Turn10 sorts after Turn2, not before as lexical sort would.
                 turn_dirs = []
                 for turn_dir in conv_dir.iterdir():
                     match = _TURN_RE.match(turn_dir.name)
