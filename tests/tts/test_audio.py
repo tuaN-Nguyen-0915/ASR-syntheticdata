@@ -1,0 +1,139 @@
+import io
+
+import numpy as np
+import pytest
+import soundfile as sf
+
+from meddies_tts.audio import (
+    TARGET_SAMPLE_RATE,
+    duration_seconds,
+    join_chunks,
+    match_loudness,
+    resample,
+    to_flac_bytes,
+)
+
+
+def _tone(seconds, sample_rate=48000, freq=440.0):
+    t = np.linspace(0, seconds, int(seconds * sample_rate), endpoint=False)
+    return (0.3 * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+
+
+def test_target_sample_rate_is_16k():
+    assert TARGET_SAMPLE_RATE == 16000
+
+
+def test_single_chunk_is_returned_unchanged():
+    wave = _tone(0.5)
+    assert np.array_equal(join_chunks([wave], 48000, 250), wave)
+
+
+def test_join_inserts_silence_between_chunks():
+    wave = _tone(0.5)
+    joined = join_chunks([wave, wave], 48000, 250)
+    expected = len(wave) * 2 + int(48000 * 0.25)
+    assert len(joined) == expected
+
+
+def test_join_adds_no_trailing_silence():
+    wave = _tone(0.1)
+    joined = join_chunks([wave, wave, wave], 48000, 100)
+    assert len(joined) == len(wave) * 3 + 2 * int(48000 * 0.1)
+
+
+def test_join_of_empty_list_raises():
+    with pytest.raises(ValueError, match="at least one"):
+        join_chunks([], 48000, 250)
+
+
+def test_join_preserves_float32_dtype():
+    assert join_chunks([_tone(0.1), _tone(0.1)], 48000, 250).dtype == np.float32
+
+
+def test_resample_changes_length_proportionally():
+    wave = _tone(1.0, 48000)
+    out = resample(wave, 48000, 16000)
+    assert abs(len(out) - 16000) <= 8
+
+
+def test_resample_is_identity_when_rates_match():
+    wave = _tone(0.25, 16000)
+    assert np.array_equal(resample(wave, 16000, 16000), wave)
+
+
+def test_resample_preserves_a_440hz_tone():
+    out = resample(_tone(1.0, 48000, 440.0), 48000, 16000)
+    spectrum = np.abs(np.fft.rfft(out))
+    peak_hz = np.fft.rfftfreq(len(out), 1 / 16000)[int(np.argmax(spectrum))]
+    assert abs(peak_hz - 440.0) < 5.0
+
+
+def test_flac_bytes_are_decodable():
+    wave = _tone(0.5, 16000)
+    decoded, sr = sf.read(io.BytesIO(to_flac_bytes(wave, 16000)), dtype="float32")
+    assert sr == 16000
+    assert len(decoded) == len(wave)
+
+
+def test_flac_is_lossless_within_16bit_quantization():
+    wave = _tone(0.5, 16000)
+    decoded, _ = sf.read(io.BytesIO(to_flac_bytes(wave, 16000)), dtype="float32")
+    assert np.max(np.abs(decoded - wave)) < 1e-3
+
+
+def test_flac_output_is_mono():
+    data = to_flac_bytes(_tone(0.2, 16000), 16000)
+    with sf.SoundFile(io.BytesIO(data)) as handle:
+        assert handle.channels == 1
+        assert handle.format == "FLAC"
+
+
+def test_flac_is_smaller_than_raw_pcm():
+    wave = _tone(2.0, 16000)
+    assert len(to_flac_bytes(wave, 16000)) < wave.nbytes
+
+
+def test_duration_seconds():
+    assert duration_seconds(np.zeros(32000, dtype=np.float32), 16000) == pytest.approx(2.0)
+
+
+# --- loudness matching across independently generated chunks ------------------
+
+def _rms(wave):
+    return float(np.sqrt(np.mean(np.square(wave, dtype=np.float64))))
+
+
+def test_match_loudness_evens_out_quiet_and_loud_chunks():
+    loud, quiet = _tone(0.5) * 1.0, _tone(0.5) * 0.4
+    before = _rms(loud) / _rms(quiet)
+    a, b = match_loudness([loud, quiet, loud])[:2]
+    assert abs(_rms(a) / _rms(b) - 1.0) < abs(before - 1.0)
+
+
+def test_match_loudness_is_a_noop_for_a_single_chunk():
+    wave = _tone(0.3)
+    assert np.array_equal(match_loudness([wave])[0], wave)
+
+
+def test_match_loudness_does_not_amplify_silence():
+    silence = np.zeros(4800, dtype=np.float32)
+    out = match_loudness([_tone(0.3), silence])
+    assert _rms(out[1]) < 1e-6
+
+
+def test_match_loudness_never_clips():
+    out = match_loudness([_tone(0.3) * 0.95, _tone(0.3) * 0.2])
+    assert all(float(np.max(np.abs(w))) <= 1.0 for w in out)
+
+
+def test_match_loudness_gain_is_clamped():
+    # A chunk 10x quieter is lifted, but by at most 2x -- never to full parity.
+    out = match_loudness([_tone(0.5), _tone(0.5) * 0.1, _tone(0.5)])
+    assert _rms(out[1]) <= _rms(_tone(0.5) * 0.1) * 2.0 + 1e-9
+
+
+def test_join_applies_loudness_matching():
+    joined = join_chunks([_tone(0.5), _tone(0.5) * 0.3], 48000, 0)
+    half = len(joined) // 2
+    ratio = _rms(joined[:half]) / max(_rms(joined[half:]), 1e-9)
+    assert ratio < 3.0   # untreated this would be ~3.3
