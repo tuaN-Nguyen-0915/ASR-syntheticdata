@@ -52,6 +52,7 @@ class TextConfig:
 
     @property
     def chunk_chars(self) -> int:
+        """Character budget per chunk, computed from chunk_target_seconds and chars_per_sec."""
         return max(1, int(self.chunk_target_seconds * self.chars_per_sec))
 
 
@@ -91,6 +92,7 @@ def _apply_overrides(raw: dict[str, Any], overrides: dict[str, Any]) -> dict[str
 
 
 def load_config(path: Path, overrides: dict[str, Any] | None = None) -> Config:
+    """Load and validate configuration from a YAML file with optional dot-key overrides."""
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     if not isinstance(raw, dict):
         raise ConfigError("config file must contain a top-level mapping")
