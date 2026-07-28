@@ -14,6 +14,7 @@ _INT64_MASK = (1 << 63) - 1
 
 def derive_seed(salt: str, *parts: object) -> int:
     """Deterministic non-negative int64 seed from a salt and identity parts."""
+    # Assumption: parts must not contain '/', and callers pass fixed arity (e.g., Task 12 always uses 2 parts).
     key = "/".join([salt, *(str(part) for part in parts)]).encode("utf-8")
     digest = hashlib.blake2b(key, digest_size=8).digest()
     return int.from_bytes(digest, "big") & _INT64_MASK
@@ -71,7 +72,9 @@ class _PairAssigner:
     def assign(
         self, config: str, disease_slug: str, conv_id: str, turn: int, role: str
     ) -> int:
+        # Role is not part of the seed: both roles in the same scope derive from one draw, ensuring they form a matched pair.
         seed = derive_seed(self._salt, *self._scope(config, disease_slug, conv_id, turn))
+        # sample(self._ids, 2) draws without replacement, guaranteeing user_id != assistant_id.
         user_id, assistant_id = random.Random(seed).sample(self._ids, 2)
         return user_id if role == "user" else assistant_id
 
@@ -91,6 +94,7 @@ class PerTurnAssigner(_PairAssigner):
 
 
 def get_assigner(cfg: SpeakerConfig, pool: list[Speaker]) -> SpeakerAssigner:
+    """Select the assignment policy from config."""
     if cfg.policy == "per_conversation":
         return PerConversationAssigner(pool, cfg.seed_salt)
     if cfg.policy == "per_turn":
