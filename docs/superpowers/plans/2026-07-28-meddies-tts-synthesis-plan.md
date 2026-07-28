@@ -604,7 +604,7 @@ from meddies_tts.vietnamese_numbers import (
         (19, "mười chín"), (20, "hai mươi"), (21, "hai mươi mốt"),
         (24, "hai mươi tư"), (25, "hai mươi lăm"), (31, "ba mươi mốt"),
         (44, "bốn mươi tư"), (45, "bốn mươi lăm"), (55, "năm mươi lăm"),
-        (90, "chín mươi"), (99, "chín trăm" if False else "chín mươi chín"),
+        (90, "chín mươi"), (99, "chín mươi chín"),
         (100, "một trăm"), (101, "một trăm linh một"), (105, "một trăm linh năm"),
         (110, "một trăm mười"), (115, "một trăm mười lăm"),
         (140, "một trăm bốn mươi"), (155, "một trăm năm mươi lăm"),
@@ -1449,7 +1449,7 @@ git commit -m "feat: add degenerate-text rejection rules"
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces: `split_sentences(text: str) -> list[str]`; `chunk_text(text: str, max_chars: int) -> list[str]`. Task 12 calls `chunk_text(text_spoken, cfg.text.chunk_chars)`.
+- Produces: `split_sentences(text: str) -> list[str]`; `split_clauses(text: str) -> list[str]`; `chunk_text(text: str, max_chars: int) -> list[str]`. Task 12 calls `chunk_text(text_spoken, cfg.text.chunk_chars)`, where `chunk_chars` is the derived property from Task 1.
 
 Contract: every chunk is non-empty, no chunk exceeds `max_chars` unless a single whitespace-free token is itself longer, and concatenating chunks with single spaces reproduces the input's tokens in order.
 
@@ -3194,11 +3194,13 @@ from meddies_tts.runner import run_shard
 from tests.tts.fakes import FakeEngine
 
 
-def _cfg(concurrency=8, chunk_chars=400):
+def _cfg(concurrency=8, chunk_seconds=12.0):
+    # chunk_chars is a derived property (Task 1), so size it via the duration target:
+    # chunk_chars == int(chunk_seconds * chars_per_sec).
     return Config(
         hf=HFConfig(repo_id="Meddies/SynthAudio"),
         engine=EngineConfig(concurrency=concurrency, max_num_seqs=concurrency),
-        text=TextConfig(chunk_chars=chunk_chars),
+        text=TextConfig(chunk_target_seconds=chunk_seconds, chars_per_sec=10.0),
     )
 
 
@@ -3263,7 +3265,7 @@ async def test_never_exceeds_the_configured_concurrency():
 async def test_long_text_is_chunked_and_n_chunks_recorded():
     text = " ".join(f"Đây là câu số {i}." for i in range(60))
     rows, _ = await run_shard("vi-00000", [_row(0, text)], FakeEngine(), _REFS,
-                              _cfg(chunk_chars=120))
+                              _cfg(chunk_seconds=12.0))   # 120-char budget
     assert rows[0]["n_chunks"] > 1
 
 
