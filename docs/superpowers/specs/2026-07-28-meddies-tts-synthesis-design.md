@@ -263,6 +263,11 @@ Everything tunable is config, not code, and the resolved config is stamped into 
 shard's Parquet metadata for provenance:
 
 ```yaml
+hf:
+  repo_id: null                 # REQUIRED, e.g. "your-name/meddies-speech"
+  private: true
+  revision: "main"
+  token_secret: "huggingface"   # Modal Secret holding HF_TOKEN (write scope)
 speaker:
   policy: per_conversation      # or per_turn
   pool: all                     # or a file listing allowed speaker_ids
@@ -290,6 +295,27 @@ run:
 Speaker assignment is resolved in Stage 1, which is CPU-only and takes seconds — so
 changing policy or pool costs no GPU time.
 
+**`hf.repo_id` has no default and is required.** There is no fallback repo name anywhere
+in the code: if it is unset, `plan`, `status` and the Modal entrypoint all fail
+immediately with a clear message. Defaulting a destination would risk publishing a medical
+dataset to the wrong place, so it is always an explicit choice. It can be supplied in
+`config.yaml`, overridden per-invocation with `--hf-repo`, and it is **not** part of
+`plan_hash` — retargeting the destination does not invalidate a plan or orphan finished
+shards, it just changes which repo `status` diffs against.
+
+**Preflight before any GPU spend.** `cli.py preflight` runs before the first dispatch and
+verifies, against the configured repo:
+
+- the token in the Modal Secret resolves and has **write** scope
+- the repo exists — or is created as a `dataset` repo with the configured visibility
+- a small test file can be committed and deleted
+- `list_repo_files()` succeeds, which is the same call resumption depends on
+
+Without this, a bad token or a typo'd repo id would surface only *after* a container had
+spent ~12 minutes of A100 time generating a shard it then could not upload. Preflight
+makes that failure cost seconds instead of dollars, and it is re-run automatically at the
+start of every `--shards remaining` invocation.
+
 ### 3.8 Multi-config support
 
 `config` is a first-class dimension, never a hardcoded `"vietnamese"`:
@@ -310,9 +336,9 @@ changing policy or pool costs no GPU time.
   data/english/train-00000-of-01100.parquet
   ```
 
-  declared via `configs:` in the dataset card, giving
-  `load_dataset("<user>/meddies-speech", "vietnamese")`. Adding English later is new files
-  in an existing repo, not a migration.
+  in the repo named by `hf.repo_id` (§3.7), declared via `configs:` in the dataset card,
+  giving `load_dataset(hf.repo_id, "vietnamese")`. Adding English later is new files in an
+  existing repo, not a migration.
 - **Reference speakers** — unchanged. The same 147 Vietnamese speakers voice both
   languages; English output is therefore Vietnamese-accented by construction. That is a
   property to evaluate in the listening pack, not a bug.
@@ -381,7 +407,8 @@ meddies_tts/
   qc.py         per-utterance sanity checks · ASR round-trip
   engine.py     nano-vllm wrapper — the ONLY GPU-dependent module
 app.py          Modal app: image, volumes, @enter, shard function
-cli.py          build-manifest · plan · estimate · status · sample · materialize-tree
+cli.py          build-manifest · plan · preflight · estimate · status · sample
+                · materialize-tree
 ```
 
 Every module except `engine.py` and `app.py` is pure Python with no GPU import, so the
@@ -633,6 +660,10 @@ Everything except `engine.py` is GPU-free and runs on the development Mac.
 - `resume` — given a plan and a fake repo listing, the driver dispatches exactly the
   missing shard ids; a changed salt/config/packing alters `plan_hash` and `status`
   refuses to dispatch rather than writing incompatible shards
+- `config` — an unset `hf.repo_id` fails fast in `plan`, `status` and the entrypoint;
+  `--hf-repo` overrides the file; changing `repo_id` leaves `plan_hash` unchanged
+- `preflight` — against a mocked `HfApi`: missing token, read-only token, absent repo and
+  successful round-trip each produce the right outcome before any GPU is requested
 
 **Integration with `FakeEngine`:** a stand-in implementing the same protocol as
 `engine.py` and yielding sine waves. Runs the entire Stage 2 locally, writes a real
