@@ -182,7 +182,6 @@ class RunConfig:
     gpu: str = "A100-40GB"
     convs_per_shard: int = 122
     budget_usd: float | None = None
-    qc_asr_sample_rate: float = 0.01
     configs: tuple[str, ...] = ("vietnamese",)
 
 
@@ -253,8 +252,6 @@ def _validate(cfg: Config) -> None:
             f"engine.max_num_seqs ({cfg.engine.max_num_seqs}); extra requests would "
             "only queue inside the engine"
         )
-    if not 0.0 <= cfg.run.qc_asr_sample_rate <= 1.0:
-        raise ConfigError("run.qc_asr_sample_rate must be between 0.0 and 1.0")
 ```
 
 ```yaml
@@ -289,7 +286,6 @@ run:
   gpu: "A100-40GB"
   convs_per_shard: 122
   budget_usd: null
-  qc_asr_sample_rate: 0.01
   configs: ["vietnamese"]
 ```
 
@@ -4012,10 +4008,28 @@ python scripts/pilot_report.py \
 from meddies_tts.plan import read_plan; print(read_plan('shard_plan.parquet').num_rows)")
 ```
 
-Write the output, plus the concurrency sweep table and notes from listening to samples
-across speaker categories (a clean-neutral speaker, speaker 79 whose reference is 1.3 s of
-looped audio, a pure-`angry` speaker, and a 4-emotion splice), into
-`docs/superpowers/reports/2026-07-28-pilot_report.md`.
+Write the output, plus the concurrency sweep table and notes from **two listening
+passes**, into `docs/superpowers/reports/2026-07-28-pilot_report.md`:
+
+1. **Speaker quality** — the same sentence across a clean-neutral speaker, speaker 79
+   (whose reference is 1.3 s of looped audio), a pure-`angry` speaker, and a 4-emotion
+   splice. Decides whether the full 147-speaker pool stays or gets filtered.
+2. **vinorm correctness** — 20 utterances chosen for dense numbers and units
+   (`38.5°C`, `4-5/10`, `115`, dosages). Confirm each is spoken correctly. This
+   replaces the automated ASR round-trip and is the *only* check on verbalized numbers,
+   so do not skip it:
+
+```bash
+python3 -c "
+import pyarrow.parquet as pq, re
+t = pq.read_table('pilot_shards/train-00000-of-00473.parquet',
+                  columns=['text_raw','text_spoken','audio'])
+rows = [r for r in t.to_pylist() if len(re.findall(r'[0-9]', r['text_raw'])) >= 6][:20]
+for i, r in enumerate(rows):
+    open(f'/tmp/num_{i}.flac','wb').write(r['audio']['bytes'])
+    print(i, r['text_spoken'][:120])
+"
+```
 
 - [ ] **Step 5: Re-estimate with the measured rate**
 
@@ -4058,10 +4072,10 @@ layout → Tasks 7 (`shard_repo_path`), 13 (`plan_path`), 16.
 
 **Known gaps, deliberately deferred and recorded here rather than silently dropped:**
 
-1. **The sampled Whisper ASR round-trip (§9) has no task.** It needs a second model in the
-   image and is genuinely separable — it verifies quality rather than producing the
-   corpus. It should be its own plan after the pilot, when the measured CER on the pilot's
-   listening pack tells you whether it is worth automating.
+1. **No automated ASR round-trip, by design.** Removed from the spec (§9): scoring
+   TTS output with Whisper is circular, the deterministic pipeline gives it no drift to
+   detect, and the pilot's listening packs are a better signal. Task 17 covers the
+   residual vinorm risk with a number-heavy listening pack instead.
 2. **The dataset card body (Appendix A.2) has no task.** Stage 3 is one hand-written
    Markdown file plus a `hub.upload_bytes` call; it is not worth a TDD cycle, but it *is*
    required by HF for large datasets and must be written before the repo is shared.

@@ -291,7 +291,6 @@ run:
   gpu: "A100-40GB"
   convs_per_shard: 122
   budget_usd: null
-  qc_asr_sample_rate: 0.01
 ```
 
 Speaker assignment is resolved in Stage 1, which is CPU-only and takes seconds — so
@@ -410,7 +409,7 @@ meddies_tts/
   speakers.py   pool loading · PerConversation / PerTurn assigners
   shards.py     shard planning · parquet schema · writer
   audio.py      concat · silence join · 48k→16k · FLAC
-  qc.py         per-utterance sanity checks · ASR round-trip
+  qc.py         per-utterance sanity checks
   engine.py     nano-vllm wrapper — the ONLY GPU-dependent module
 app.py          Modal app: image, volumes, @enter, shard function
 cli.py          build-manifest · plan · preflight · estimate · status · sample
@@ -613,20 +612,32 @@ the pilot and for re-doing specific shards.
 
 A failing check triggers a retry with a new seed; a second failure rejects the utterance.
 
-**Sampled ASR round-trip:** Whisper transcribes `qc_asr_sample_rate` of utterances (1% in
-the full run, 100% during the pilot) and CER/WER is computed against `text_spoken`,
-summarized per shard. This is the only check that verifies the model *said the right
-words* — particularly for vinorm-verbalized numbers, where Vietnamese TTS fails silently.
-Cost is negligible relative to TTS.
+**No automated ASR round-trip.** An earlier draft proposed transcribing a sample with
+Whisper and scoring CER against `text_spoken`. It is deliberately excluded:
+
+- **It is circular.** Whisper's Vietnamese WER is mediocre on ordinary speech and worse on
+  medical vocabulary and verbalized numbers, so a high CER would mostly measure Whisper's
+  weakness rather than VoxCPM's. It validates ASR training data with an ASR model.
+- **There is no drift for it to catch.** The pipeline is deterministic — same normalizer,
+  same model, same seeds for every row — and the one real drift source, a changed config,
+  is already caught by `plan_hash` (§8.1).
+- **The pilot's listening pack dominates it.** Twenty samples judged by someone who reads
+  Vietnamese are more informative than CER over thousands filtered through a weak
+  transcriber.
+
+The residual risk this leaves is silent mispronunciation of vinorm output. It is addressed
+by listening to number-heavy samples during the pilot, and partly caught already by the
+duration check above, since garbled generation usually has anomalous duration.
 
 **Pilot gate.** Before the full run, 3 shards (~366 conversations, ~4,500 utterances,
 roughly $2) produce `pilot_report.md` containing:
 
 - the measured **chars → seconds** ratio, and corrected totals for hours, GB and dollars
 - **RTF swept over concurrency ∈ {1, 8, 16, 32, 48, 64}**, fixing the semaphore value
-- CER from a full Whisper round-trip
 - a listening pack: one sentence across ~10 speakers spanning clean-neutral,
   1.3 s-looped, pure-angry and 4-emotion-splice categories
+- a second listening pack of **number- and unit-heavy utterances**, to check vinorm
+  output is spoken correctly — this replaces the automated round-trip
 
 The full run is not launched until this report is reviewed. Every cost figure in this
 document depends on the first bullet.
@@ -689,10 +700,11 @@ uploaded shard round-trips.
    neutral speech. Mitigated by carrying quality columns for train-time filtering, and by
    the pilot listening pack.
 3. **`ref_audio_latents` fidelity.** Without transcripts we cannot use VoxCPM's
-   prompt-continuation cloning mode. Expected to be adequate; the pilot's CER and listening
-   pack will confirm.
+   prompt-continuation cloning mode. Expected to be adequate; the pilot's listening pack
+   will confirm.
 4. **vinorm behaviour on medical text.** Dosages, ranges (`4-5/10`) and units may verbalize
-   oddly. The 100% round-trip during the pilot surfaces this.
+   oddly. The pilot's number-heavy listening pack surfaces this; there is no automated
+   check, by design (§9).
 5. ~~**HF storage tier.**~~ **Resolved.** The `Meddies` organization has multiple TB of
    storage available, comfortably covering the ~480 GB Vietnamese run and leaving room for
    English (~880 GB) later. No plan change needed.
@@ -725,8 +737,7 @@ Meddies/SynthAudio
 │   └── shard_plan-vi.parquet                 ~300 MB — what resumption reads (§8.1)
 └── qc/
     ├── pilot_report.md                       §9 pilot gate output
-    ├── rejects-vi.jsonl                      rejected utterances + reason (§5)
-    └── asr_roundtrip-vi.json                 per-shard CER/WER
+    └── rejects-vi.jsonl                      rejected utterances + reason (§5)
 ```
 
 474 files rather than 711,647. `data/vietnamese/` holds 473 entries, far below HF's 10k
