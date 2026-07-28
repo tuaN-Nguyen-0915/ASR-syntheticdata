@@ -79,7 +79,14 @@ def number_to_words(n: int, dialect: Dialect = NORTHERN) -> str:
     for name, size in (("tỷ", 10**9), ("triệu", 10**6), (dialect.thousand, 10**3)):
         if n >= size:
             group, n = divmod(n, size)
-            parts.append(f"{_hundreds(group, dialect, force_hundred=bool(parts))} {name}")
+            # A group can itself exceed 999 once the whole number is >= 10**12
+            # (e.g. 10**12 // 10**9 == 1000): recurse instead of handing it to
+            # _hundreds, which assumes a single 0-999 chunk and would otherwise
+            # index _DIGITS out of range. Only the leading (tỷ) group can ever
+            # be this large, since every later group is n mod 10**9 or smaller.
+            words = (number_to_words(group, dialect) if group >= 1000
+                     else _hundreds(group, dialect, force_hundred=bool(parts)))
+            parts.append(f"{words} {name}")
     if n:
         parts.append(_hundreds(n, dialect, force_hundred=True))
     return " ".join(parts)

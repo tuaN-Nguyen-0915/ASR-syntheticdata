@@ -115,3 +115,19 @@ def test_dialect_from_seed_randomizes_four_independently():
 
 def test_decimal_uses_dialect_for_the_whole_part():
     assert decimal_to_words("101.5", SOUTHERN) == "một trăm lẻ một phẩy năm"
+
+
+# --- crash guard for numbers beyond the tỷ/triệu/thousand scale --------------
+# number_to_words used to index _DIGITS[hundred] assuming a group is always
+# 0-999; once the leading group itself exceeds 999 (n >= 10**12) that raised
+# IndexError. A single bad shard should never crash a whole synthesis run.
+
+def test_number_to_words_handles_a_trillion():
+    assert number_to_words(10**12) == "một nghìn tỷ"
+
+
+def test_number_to_words_handles_an_arbitrary_thirteen_digit_number():
+    assert number_to_words(1234567890123) == (
+        "một nghìn hai trăm ba mươi tư tỷ năm trăm sáu mươi bảy triệu "
+        "tám trăm chín mươi nghìn một trăm hai mươi ba"
+    )

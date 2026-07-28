@@ -44,10 +44,16 @@ _UNITS = {
     "°c": "độ C", "%": "phần trăm", "h": "giờ",
     "viên": "viên", "lần": "lần", "gói": "gói", "ống": "ống", "giọt": "giọt",
     "ly": "ly", "bữa": "bữa",
+    "m2": "mét vuông", "cm2": "xen-ti-mét vuông", "mmol": "mi-li-mol",
+    "mol": "mol", "nm": "na-nô-mét",
 }
+# Longer/more specific alternatives must precede shorter ones they share a
+# prefix with (e.g. "cm2" before "cm", "mmol" before "mm"), or the shorter one
+# wins and strands the remaining characters -- re.sub alternation is
+# first-match, not longest-match.
 _UNIT_ALT = (
-    "°C|%|mmHg|kcal|mcg|µg|mg|ml|kg|km|cm|mm|IU|cc|lít|viên|gói|ống|giọt|ly|bữa|lần"
-    "|[gmlh]"
+    "°C|%|mmHg|kcal|mmol|mol|mcg|µg|mg|ml|kg|km|cm2|cm|mm|nm|IU|cc|lít|viên|gói"
+    "|ống|giọt|ly|bữa|lần|m2|[gmlh]"
 )
 _PERIODS = {
     "ngày": "mỗi ngày", "tuần": "mỗi tuần", "tháng": "mỗi tháng", "giờ": "mỗi giờ",
@@ -57,6 +63,28 @@ _MEASURES = "lần|lít|phút|tiếng|giờ|ngày|tháng|tuần|nước|viên|g�
 # Letters glued (optionally via hyphen) to digits are identifiers -- B12, T4,
 # HbA1c, N95, SpO2, COVID-19 -- and must never be verbalized.
 _IDENT = re.compile(r"\b[A-Za-zÀ-ỹ]+-?\d+[A-Za-z0-9]*\b")
+
+# --- Vietnamese thousands-dotted currency ("500.000đ") ----------------------
+# Vietnamese groups thousands with "." (500.000 = five hundred thousand), the
+# opposite of the decimal rule's "." further down. Each group after the first
+# is exactly 3 digits, which is what distinguishes this from a real decimal
+# like "38.5" (1 digit) or "1.25" (2 digits).
+_DOTTED_THOUSANDS = r"\d{1,3}(?:\.\d{3})+"
+_CURRENCY = {"đ": "đồng", "vnđ": "đồng", "vnd": "đồng"}
+# Trailing \b keeps this from matching just the "đ" that starts the unrelated
+# word "đồng" when the currency is already spelled out in the source text.
+_CURRENCY_SYM = r"(?i:VNĐ|VND|đ)\b"
+
+# --- Roman-numeral severity grading ("độ III", "giai đoạn II", "type I") ----
+_ROMAN = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5,
+          "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10}
+# Longest numeral first, same reasoning as _UNIT_ALT above: "I" would
+# otherwise steal the first letter of "III"/"IV"/etc. before they get a turn.
+_ROMAN_ALT = "VIII|III|VII|II|IV|VI|IX|I|V|X"
+# Grading words measured in the corpus. A bare Roman numeral with no grading
+# word in front is left alone -- far more likely to be an abbreviation, a
+# list marker, or English text than a severity grade.
+_GRADE_WORDS = r"giai\s+đoạn|độ|type|nhóm|cấp|mức"
 
 
 def _strip_reasoning_tags(text: str) -> str:
@@ -98,6 +126,14 @@ def _int_or_decimal(token: str, dialect: Dialect) -> str:
             else number_to_words(int(token), dialect))
 
 
+def _dedot(token: str) -> int:
+    return int(token.replace(".", ""))  # "1.500.000" -> 1500000
+
+
+def _currency_suffix(symbol: str | None) -> str:
+    return f" {_CURRENCY[symbol.lower()]}" if symbol else ""
+
+
 def _slot(index: int) -> str:
     """Digit-free sentinel -- a numeric placeholder would itself get verbalized."""
     letters = ""
@@ -116,9 +152,34 @@ def _normalize_numbers(text: str, dialect: Dialect = NORTHERN) -> str:
         saved.append(match.group(0))
         return _slot(len(saved) - 1)
 
-    out = _IDENT.sub(stash, text)                       # protect B12, COVID-19, HbA1c
+    # Dosing shorthand ("x2/ngày") must run before identifier protection below,
+    # or "x2" (letter + digits) gets mistaken for a protected identifier like
+    # "B12" and survives untouched. Safe to special-case ahead of protection
+    # because, unlike a real identifier, it's always followed by "/<period>".
+    out = re.sub(
+        rf"\bx\s?(\d+)\s*/\s*({'|'.join(_PERIODS)})\b",
+        lambda m: f"{number_to_words(int(m[1]), dialect)} lần {_PERIODS[m[2]]}", text)
+    out = _IDENT.sub(stash, out)                        # protect B12, COVID-19, HbA1c
     out = re.sub(r">\s*(?=\d)", "trên ", out)
     out = re.sub(r"<\s*(?=\d)", "dưới ", out)
+    # Roman-numeral grading ("độ III", "type I") only right after a grading
+    # word -- operates on letters, not digits, so it is independent of every
+    # other rule here and can run at any point in this function.
+    out = re.sub(
+        rf"\b({_GRADE_WORDS})\s+({_ROMAN_ALT})\b",
+        lambda m: f"{m[1]} {number_to_words(_ROMAN[m[2]], dialect)}", out)
+    # dotted-thousands range ("100.000-300.000đ") before dotted-thousands single,
+    # which in turn MUST run before the decimal rule below -- otherwise "." in
+    # "500.000" is read as a decimal point instead of a thousands separator, and
+    # a dashed pair like "100.000-300.000" gets torn apart at the dots before
+    # the generic range/decimal rules even see it (see task-3 Fix 1).
+    out = re.sub(
+        rf"({_DOTTED_THOUSANDS})\s*-\s*({_DOTTED_THOUSANDS})(?:\s*({_CURRENCY_SYM}))?",
+        lambda m: f"{number_to_words(_dedot(m[1]), dialect)} đến {number_to_words(_dedot(m[2]), dialect)}"
+                  + _currency_suffix(m[3]), out)
+    out = re.sub(
+        rf"({_DOTTED_THOUSANDS})(?:\s*({_CURRENCY_SYM}))?",
+        lambda m: number_to_words(_dedot(m[1]), dialect) + _currency_suffix(m[2]), out)
     # range-fraction ("6-7/10") must run before the bare fraction rule, or the
     # trailing "/10" would be consumed as a plain a/b fraction of just "7/10".
     out = re.sub(
@@ -132,17 +193,31 @@ def _normalize_numbers(text: str, dialect: Dialect = NORTHERN) -> str:
         rf"(\d+(?:[.,]\d+)?)\s*({_UNIT_ALT})\s*/\s*({'|'.join(_PERIODS)})",
         lambda m: f"{_int_or_decimal(m[1], dialect)} {_unit(m[2])} {_PERIODS[m[3]]}", out)
     # bare fraction ("140/90") before the bare-integer rule, or D/D becomes two
-    # separate numbers with a literal slash left between them.
+    # separate numbers with a literal slash left between them. The trailing
+    # unit's "\s*" lives INSIDE the optional group -- outside it, re.sub still
+    # consumes the space even when no unit follows, gluing the next word on
+    # ("140/90 vậy" -> "...mườivậy" instead of "...mười vậy").
     out = re.sub(
-        rf"(\d+)\s*/\s*(\d+)\s*({_UNIT_ALT})?",
+        rf"(\d+)\s*/\s*(\d+)(?:\s*({_UNIT_ALT}))?",
         lambda m: f"{number_to_words(int(m[1]), dialect)} trên {number_to_words(int(m[2]), dialect)}"
                   + (f" {_unit(m[3])}" if m[3] else ""), out)
     out = re.sub(
         r"(?<![\d/])(\d+)\s*-\s*(\d+)(?![\d/])",
         lambda m: f"{number_to_words(int(m[1]), dialect)} đến {number_to_words(int(m[2]), dialect)}", out)
+    # Same "\s* outside the optional group" trap as the fraction rule above --
+    # keep the space inside so an unmatched unit doesn't eat the following space.
     out = re.sub(
-        rf"(\d+[.,]\d+)\s*({_UNIT_ALT})?",
+        rf"(\d+[.,]\d+)(?:\s*({_UNIT_ALT}))?",
         lambda m: decimal_to_words(m[1], dialect) + (f" {_unit(m[2])}" if m[2] else ""), out)
+    # Informal height notation ("1m72" = 1.72 m). Must run before the number+unit
+    # rule below, or that rule's bare "m" fallback grabs just the leading digit
+    # and strands the rest ("1m72" -> "một mét72"). The suffix digits are read
+    # individually (digit-by-digit), not as a number ("72" -> "bảy hai", not
+    # "bảy mươi hai"). Excludes a lone trailing "2" ("20m2") so it falls through
+    # to the unit rule instead, which reads that as square meters.
+    out = re.sub(
+        r"\b(\d+)m(?!2\b)(\d+)\b",
+        lambda m: f"{number_to_words(int(m[1]), dialect)} mét {digits_to_words(m[2])}", out)
     out = re.sub(
         rf"(\d+)\s*({_UNIT_ALT})(?![A-Za-zÀ-ỹ])",
         lambda m: f"{number_to_words(int(m[1]), dialect)} {_unit(m[2])}", out)

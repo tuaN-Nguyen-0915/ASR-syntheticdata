@@ -156,3 +156,90 @@ def test_alphanumeric_identifiers_are_never_verbalized(ident):
 
 def test_identifier_protection_does_not_block_neighbouring_numbers():
     assert _VN.normalize("SpO2 95%") == "SpO2 chín mươi lăm phần trăm"
+
+
+# --- Fix round 1: dotted-thousands currency, height, dosing shorthand, ------
+# --- extra units, and Roman-numeral grading ----------------------------------
+
+def test_dotted_thousands_currency():
+    assert _VN.normalize("Giá 500.000 đồng một lần.") == (
+        "Giá năm trăm nghìn đồng một lần."
+    )
+
+
+def test_dotted_thousands_range_with_glued_currency_symbol():
+    assert _VN.normalize("Chi phí khoảng 100.000-300.000đ.") == (
+        "Chi phí khoảng một trăm nghìn đến ba trăm nghìn đồng."
+    )
+
+
+def test_dotted_thousands_million_with_glued_currency_symbol():
+    assert _VN.normalize("1.500.000đ") == "một triệu năm trăm nghìn đồng"
+
+
+def test_dotted_thousands_is_not_confused_with_a_real_decimal():
+    # "38.5" (1 digit after the dot) must still read as a decimal, not thousands.
+    assert _VN.normalize("Sốt 38.5 độ") == "Sốt ba mươi tám phẩy năm độ"
+
+
+def test_height_notation_reads_suffix_digit_by_digit():
+    assert _VN.normalize("Cao 1m72, nặng 65kg.") == (
+        "Cao một mét bảy hai, nặng sáu mươi lăm ki-lô-gam."
+    )
+
+
+def test_square_meters_is_not_mistaken_for_height_notation():
+    assert _VN.normalize("Diện tích tổn thương 20m2.") == (
+        "Diện tích tổn thương hai mươi mét vuông."
+    )
+
+
+def test_dosing_shorthand_x_times_per_period():
+    assert _VN.normalize("Uống x2/ngày.") == "Uống hai lần mỗi ngày."
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Diện tích 5m2", "Diện tích năm mét vuông"),
+        ("vết loét 5cm2", "vết loét năm xen-ti-mét vuông"),
+        ("Glucose 5mmol", "Glucose năm mi-li-mol"),
+        ("dùng 2mol", "dùng hai mol"),
+        ("bước sóng 400nm", "bước sóng bốn trăm na-nô-mét"),
+    ],
+)
+def test_extra_units(text, expected):
+    assert _VN.normalize(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("độ I", "độ một"),
+        ("độ III", "độ ba"),
+        ("giai đoạn II", "giai đoạn hai"),
+        ("type I", "type một"),
+    ],
+)
+def test_roman_numeral_severity_grading(text, expected):
+    assert _VN.normalize(text) == expected
+
+
+def test_bare_roman_numeral_without_a_grading_word_is_left_alone():
+    # No "độ"/"giai đoạn"/"type"/"nhóm"/"cấp"/"mức" in front -- far more likely
+    # to be an abbreviation or list marker than a severity grade.
+    assert _VN.normalize("Chương trình X thành công.") == "Chương trình X thành công."
+
+
+# --- fraction/decimal rules must not eat the space when no unit follows ------
+# Found while testing Fix 1: "\s*(unit)?" outside the optional group still
+# consumes the space even when the unit itself doesn't match, gluing the next
+# word on ("37,2 độ" -> "...haiđộ"). Pre-existing in the original decimal and
+# bare-fraction rules; fixed by moving "\s*" inside the optional group.
+
+def test_decimal_without_a_trailing_unit_keeps_its_following_space():
+    assert _VN.normalize("Sốt 38.5 độ") == "Sốt ba mươi tám phẩy năm độ"
+
+
+def test_fraction_without_a_trailing_unit_keeps_its_following_space():
+    assert _VN.normalize("Tỷ lệ 6/10 vậy đó.") == "Tỷ lệ sáu trên mười vậy đó."
