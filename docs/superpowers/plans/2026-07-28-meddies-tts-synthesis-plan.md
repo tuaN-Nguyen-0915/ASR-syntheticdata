@@ -15,6 +15,7 @@
 - **New package is `meddies_tts/`.** The existing `meddies/` package (text extraction) is untouched by every task in this plan.
 - **Only `meddies_tts/engine.py` and `app.py` may import CUDA/GPU/Modal libraries.** Every other module must import and run on the dev Mac (Apple M2, no CUDA). Any task adding a GPU import to another module is wrong.
 - **`nano-vllm-voxcpm` cannot be installed or run locally** — it requires Linux + NVIDIA + `flash-attn` and explicitly does not support CPU. All local pipeline tests use `FakeEngine` (Task 11).
+- **`vinorm` cannot run on the dev Mac either.** It ships an x86-64 Linux ELF binary; it pip-installs on macOS but every call raises `Exec format error`. It must never appear in `requirements.txt`, only in the Modal CPU image. `VietnameseNormalizer` therefore takes its verbalizer as an injected callable so tests stub it (Task 3), and **Stage 1 runs as a Modal CPU function** (Task 16), not locally.
 - **Output audio is 16 kHz mono FLAC.** VoxCPM2 emits 48 kHz; `audio.py` resamples down. Never store 48 kHz.
 - **`hf.repo_id` is `"Meddies/SynthAudio"`, set in `config.yaml`, with no default anywhere in code.** If the key is missing, fail immediately with a clear message.
 - **`engine.concurrency` must be `<= engine.max_num_seqs`.** Config validation enforces this.
@@ -528,7 +529,9 @@ git commit -m "feat: flatten output_full tree into a manifest parquet"
 - Consumes: nothing from earlier tasks.
 - Produces: `strip_markup(text: str) -> str`; `Normalizer` Protocol with `normalize(self, text: str) -> str`; `VietnameseNormalizer(verbalize: Callable[[str], str] | None = None)`; `EnglishNormalizer()`; `get_normalizer(config: str, verbalize: Callable[[str], str] | None = None) -> Normalizer`. Task 7 calls `get_normalizer(config).normalize(text_raw)`.
 
-**Why `verbalize` is injectable:** `vinorm` ships a compiled binary and frequently fails to install on macOS. Injecting the callable keeps every test runnable on the dev Mac and isolates us from vinorm API drift. Production passes nothing and gets the real vinorm.
+**Why `verbalize` is injectable:** `vinorm` ships an **x86-64 Linux ELF binary**. It pip-installs on arm64 macOS but every call dies with `OSError: [Errno 8] Exec format error` — verified directly, not assumed. Injecting the callable keeps every test runnable on the dev Mac and isolates us from vinorm API drift. Production (the Modal CPU function, Task 16) passes nothing and gets the real vinorm.
+
+**This is also why normalization is required at all.** Four real number-dense utterances were synthesized in the VoxCPM demo: only `mg` came out right; `38.5°C`, `>`, `gọi 115`, `6-7/10`, `140/90`, `20%` and multi-digit numbers were all wrong. Raising `inference_timesteps` cannot fix it — timesteps drive the diffusion decoder's audio fidelity, not word choice.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3170,7 +3173,7 @@ git commit -m "feat: add hub client with preflight, resume diff and drift detect
 
 **Interfaces:**
 - Consumes: everything from Tasks 1–13.
-- Produces: `main(argv: list[str] | None = None) -> int` with subcommands `build-manifest`, `plan`, `preflight`, `estimate`, `status`, `materialize-tree`. Task 16's Modal entrypoint reuses `plan` output.
+- Produces: `main(argv: list[str] | None = None) -> int` with subcommands `build-manifest`, `preflight`, `estimate`, `status`, `show-config`, `materialize-tree`. `estimate` and `status` read the small `plan_summary.json` that Task 16's `build_plan_remote` writes, never the 300 MB plan itself.
 
 Global flags: `--config PATH` (default `config.yaml`), `--hf-repo ID` (overrides `hf.repo_id`).
 
@@ -3202,7 +3205,7 @@ _VISEC = """speaker_id,output_path,duration_seconds,clip_count,emotions,unique_s
 
 
 @pytest.fixture()
-def workspace(tmp_path, monkeypatch):
+def workspace(tmp_path):
     (tmp_path / "config.yaml").write_text(_CONFIG, encoding="utf-8")
     tree = tmp_path / "output_full" / "vietnamese" / "suy_gan"
     for conv in ("conv_0001", "conv_0002", "conv_0003"):
@@ -3217,8 +3220,6 @@ def workspace(tmp_path, monkeypatch):
     (visec / "metadata.csv").write_text(_VISEC, encoding="utf-8")
     for sid in range(3):
         (visec / f"speaker_{sid:03d}.wav").write_bytes(b"RIFF")
-    # vinorm is unavailable on macOS; substitute an identity verbalizer.
-    monkeypatch.setattr(cli, "load_verbalizer", lambda: (lambda t: t))
     return tmp_path
 
 
@@ -3236,53 +3237,30 @@ def test_build_manifest_writes_parquet(workspace):
     assert read_manifest(out).num_rows == 12
 
 
-def test_plan_writes_plan_and_rejects(workspace):
-    manifest = workspace / "manifest.parquet"
-    _run(workspace, "build-manifest", "--output-root", str(workspace / "output_full"),
-         "--out", str(manifest))
-    plan_out = workspace / "shard_plan.parquet"
-    rejects = workspace / "rejects.jsonl"
-    assert _run(workspace, "plan", "--manifest", str(manifest),
-                "--visec", str(workspace / "ViSEC" / "processed_audio_by_id" / "metadata.csv"),
-                "--out", str(plan_out), "--rejects", str(rejects)) == 0
-    assert read_plan(plan_out).num_rows == 12
-    assert rejects.exists()
-
-
-def test_plan_packs_conversations_into_shards(workspace):
-    manifest = workspace / "manifest.parquet"
-    _run(workspace, "build-manifest", "--output-root", str(workspace / "output_full"),
-         "--out", str(manifest))
-    plan_out = workspace / "shard_plan.parquet"
-    _run(workspace, "plan", "--manifest", str(manifest),
-         "--visec", str(workspace / "ViSEC" / "processed_audio_by_id" / "metadata.csv"),
-         "--out", str(plan_out), "--rejects", str(workspace / "r.jsonl"))
-    shards = set(read_plan(plan_out).column("shard_id").to_pylist())
-    assert shards == {"vi-00000", "vi-00001"}
-
-
-def test_plan_writes_a_hash_file(workspace):
-    manifest = workspace / "manifest.parquet"
-    _run(workspace, "build-manifest", "--output-root", str(workspace / "output_full"),
-         "--out", str(manifest))
-    plan_out = workspace / "shard_plan.parquet"
-    _run(workspace, "plan", "--manifest", str(manifest),
-         "--visec", str(workspace / "ViSEC" / "processed_audio_by_id" / "metadata.csv"),
-         "--out", str(plan_out), "--rejects", str(workspace / "r.jsonl"))
-    assert (plan_out.with_suffix(".hash")).read_text(encoding="utf-8").strip()
-
-
 def test_estimate_reports_cost_and_storage(workspace, capsys):
-    manifest = workspace / "manifest.parquet"
-    _run(workspace, "build-manifest", "--output-root", str(workspace / "output_full"),
-         "--out", str(manifest))
-    plan_out = workspace / "shard_plan.parquet"
-    _run(workspace, "plan", "--manifest", str(manifest),
-         "--visec", str(workspace / "ViSEC" / "processed_audio_by_id" / "metadata.csv"),
-         "--out", str(plan_out), "--rejects", str(workspace / "r.jsonl"))
-    assert _run(workspace, "estimate", "--plan", str(plan_out)) == 0
+    summary = workspace / "plan_summary.json"
+    summary.write_text(json.dumps({
+        "plan_hash": "abc", "configs": ["vietnamese"], "utterances": 12,
+        "rejected": 0, "total_chars": 140_000, "shards": {"vietnamese": 2},
+        "shard_targets": [["vi-00000", "data/vietnamese/train-00000-of-00002.parquet"]],
+    }), encoding="utf-8")
+    assert _run(workspace, "estimate", "--summary", str(summary)) == 0
     out = capsys.readouterr().out
     assert "GPU-hours" in out and "USD" in out and "GB" in out
+
+
+def test_estimate_scales_with_chars_per_sec(workspace, capsys):
+    summary = workspace / "plan_summary.json"
+    summary.write_text(json.dumps({
+        "plan_hash": "abc", "configs": ["vietnamese"], "utterances": 12,
+        "rejected": 0, "total_chars": 140_000, "shards": {"vietnamese": 2},
+        "shard_targets": [],
+    }), encoding="utf-8")
+    _run(workspace, "estimate", "--summary", str(summary), "--chars-per-sec", "7")
+    slow = capsys.readouterr().out
+    _run(workspace, "estimate", "--summary", str(summary), "--chars-per-sec", "28")
+    fast = capsys.readouterr().out
+    assert slow != fast
 
 
 def test_missing_repo_id_exits_nonzero(workspace, capsys):
@@ -3343,16 +3321,8 @@ from pathlib import Path
 import pyarrow.parquet as pq
 
 from meddies_tts.config import ConfigError, load_config
-from meddies_tts.manifest import build_manifest, read_manifest, write_manifest
-from meddies_tts.plan import (
-    build_plan,
-    compute_plan_hash,
-    read_plan,
-    shard_totals,
-    write_plan,
-)
+from meddies_tts.manifest import build_manifest, write_manifest
 from meddies_tts.qc import DEFAULT_CHARS_PER_SEC
-from meddies_tts.speakers import load_pool
 
 # Modal A100-40GB, USD/sec, from modal.com/pricing
 _A100_USD_PER_SEC = 0.000583
@@ -3360,13 +3330,6 @@ _A100_USD_PER_SEC = 0.000583
 _AGGREGATE_SPEEDUP = 70.0
 # 16 kHz 16-bit FLAC, bytes per second of audio
 _FLAC_BYTES_PER_SEC = 19_000
-
-
-def load_verbalizer():
-    """Indirection so tests (and macOS, where vinorm often will not build) can stub it."""
-    from meddies_tts.textprep import _default_vinorm
-
-    return _default_vinorm()
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -3379,20 +3342,19 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--output-root", required=True)
     p.add_argument("--out", required=True)
 
-    p = sub.add_parser("plan", help="normalize, reject, assign speakers, pack shards")
-    p.add_argument("--manifest", required=True)
-    p.add_argument("--visec", required=True, help="path to ViSEC metadata.csv")
-    p.add_argument("--out", required=True)
-    p.add_argument("--rejects", required=True)
+    # NOTE: there is no local `plan` command. vinorm is an x86-64 Linux binary and
+    # cannot run on macOS, so Stage 1 is `modal run app.py::build_plan_remote` (Task 16).
+    # It writes plan_summary.json, which the commands below read instead of the
+    # 300 MB shard_plan.parquet.
 
     p = sub.add_parser("preflight", help="verify HF token, repo and write access")
 
     p = sub.add_parser("estimate", help="project GPU-hours, cost and storage")
-    p.add_argument("--plan", required=True)
+    p.add_argument("--summary", required=True, help="plan_summary.json from Stage 1")
     p.add_argument("--chars-per-sec", type=float, default=DEFAULT_CHARS_PER_SEC)
 
     p = sub.add_parser("status", help="report done/remaining shards against the Hub")
-    p.add_argument("--plan", required=True)
+    p.add_argument("--summary", required=True, help="plan_summary.json from Stage 1")
 
     p = sub.add_parser("show-config", help="print the resolved configuration")
 
@@ -3410,30 +3372,6 @@ def _cmd_build_manifest(args, cfg) -> int:
     return 0
 
 
-def _cmd_plan(args, cfg) -> int:
-    manifest = read_manifest(Path(args.manifest))
-    pool = load_pool(Path(args.visec))
-    normalizers = {}
-    if "vietnamese" in cfg.run.configs:
-        from meddies_tts.textprep import VietnameseNormalizer
-
-        normalizers["vietnamese"] = VietnameseNormalizer(load_verbalizer())
-    plan, rejects = build_plan(manifest, cfg, pool, normalizers)
-
-    write_plan(plan, Path(args.out))
-    with Path(args.rejects).open("w", encoding="utf-8") as handle:
-        for record in rejects:
-            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-
-    plan_hash = compute_plan_hash(plan, cfg)
-    Path(args.out).with_suffix(".hash").write_text(plan_hash, encoding="utf-8")
-    print(
-        f"plan: {plan.num_rows:,} utterances, {sum(shard_totals(plan).values())} shards, "
-        f"{len(rejects):,} rejected -> {args.out} (hash {plan_hash})"
-    )
-    return 0
-
-
 def _cmd_preflight(args, cfg) -> int:
     from huggingface_hub import HfApi
 
@@ -3445,12 +3383,11 @@ def _cmd_preflight(args, cfg) -> int:
 
 
 def _cmd_estimate(args, cfg) -> int:
-    plan = read_plan(Path(args.plan))
-    chars = sum(len(text) for text in plan.column("text_spoken").to_pylist())
-    audio_sec = chars / args.chars_per_sec
+    summary = json.loads(Path(args.summary).read_text(encoding="utf-8"))
+    audio_sec = summary["total_chars"] / args.chars_per_sec
     gpu_sec = audio_sec / _AGGREGATE_SPEEDUP
-    print(f"utterances : {plan.num_rows:,}")
-    print(f"shards     : {sum(shard_totals(plan).values()):,}")
+    print(f"utterances : {summary['utterances']:,}")
+    print(f"shards     : {sum(summary['shards'].values()):,}")
     print(f"audio      : {audio_sec / 3600:,.1f} h  (at {args.chars_per_sec} chars/sec)")
     print(f"GPU-hours  : {gpu_sec / 3600:,.1f}")
     print(f"cost       : {gpu_sec * _A100_USD_PER_SEC:,.2f} USD  (A100-40GB)")
@@ -3461,19 +3398,18 @@ def _cmd_estimate(args, cfg) -> int:
 def _cmd_status(args, cfg) -> int:
     from huggingface_hub import HfApi
 
-    from meddies_tts.hub import check_plan_drift, list_repo_paths, remaining_targets, shard_targets
+    from meddies_tts.hub import check_plan_drift, list_repo_paths
 
-    plan = read_plan(Path(args.plan))
-    local_hash = Path(args.plan).with_suffix(".hash").read_text(encoding="utf-8").strip()
+    summary = json.loads(Path(args.summary).read_text(encoding="utf-8"))
     api = HfApi()
-    for config in cfg.run.configs:
-        check_plan_drift(api, cfg.hf.repo_id, config, local_hash)
+    for config in summary["configs"]:
+        check_plan_drift(api, cfg.hf.repo_id, config, summary["plan_hash"])
     existing = list_repo_paths(api, cfg.hf.repo_id)
-    total = len(shard_targets(plan))
-    remaining = remaining_targets(plan, existing)
-    print(f"plan hash : {local_hash}")
-    print(f"shards    : {total}")
-    print(f"done      : {total - len(remaining)}")
+    targets = summary["shard_targets"]
+    remaining = [pair for pair in targets if pair[1] not in existing]
+    print(f"plan hash : {summary['plan_hash']}")
+    print(f"shards    : {len(targets)}")
+    print(f"done      : {len(targets) - len(remaining)}")
     print(f"remaining : {len(remaining)}")
     return 0
 
@@ -3498,7 +3434,6 @@ def _cmd_materialize_tree(args, cfg) -> int:
 
 _COMMANDS = {
     "build-manifest": _cmd_build_manifest,
-    "plan": _cmd_plan,
     "preflight": _cmd_preflight,
     "estimate": _cmd_estimate,
     "status": _cmd_status,
@@ -3524,7 +3459,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/tts/test_cli_tts.py -v`
-Expected: 8 passed
+Expected: 6 passed
 
 - [ ] **Step 5: Run the whole GPU-free suite**
 
@@ -3697,6 +3632,15 @@ image = (
     .add_local_python_source("meddies_tts")
 )
 
+# Stage 1 needs vinorm but no GPU. vinorm is an x86-64 Linux binary, so this cannot
+# run on the dev Mac; it also must not drag torch/flash-attn into a CPU container.
+cpu_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install_from_requirements("requirements.txt")
+    .pip_install("vinorm>=2.0")
+    .add_local_python_source("meddies_tts")
+)
+
 app = modal.App(APP_NAME)
 weights_vol = modal.Volume.from_name("voxcpm2-weights", create_if_missing=True)
 plan_vol = modal.Volume.from_name("meddies-tts-plan", create_if_missing=True)
@@ -3721,6 +3665,57 @@ def fetch_weights() -> str:
         )
     weights_vol.commit()
     return path
+
+
+@app.function(image=cpu_image, cpu=8.0, timeout=3600,
+              volumes={PLAN_DIR: plan_vol, REFS_DIR: refs_vol})
+def build_plan_remote() -> dict:
+    """Stage 1: normalize (vinorm), reject, assign speakers, pack shards.
+
+    Reads manifest.parquet and config.yaml from the plan Volume and writes
+    shard_plan.parquet, shard_plan.hash, rejects.jsonl and plan_summary.json back to
+    it. Runs here rather than locally because vinorm cannot execute on arm64 macOS.
+    """
+    from meddies_tts.config import load_config
+    from meddies_tts.hub import shard_targets
+    from meddies_tts.manifest import read_manifest
+    from meddies_tts.plan import build_plan, compute_plan_hash, shard_totals, write_plan
+    from meddies_tts.speakers import load_pool
+    from meddies_tts.textprep import VietnameseNormalizer
+
+    root = Path(PLAN_DIR)
+    cfg = load_config(root / "config.yaml")
+    manifest = read_manifest(root / "manifest.parquet")
+    pool = load_pool(Path(f"{REFS_DIR}/processed_audio_by_id/metadata.csv"))
+
+    normalizers = {}
+    if "vietnamese" in cfg.run.configs:
+        normalizers["vietnamese"] = VietnameseNormalizer()   # real vinorm
+
+    plan, rejects = build_plan(manifest, cfg, pool, normalizers)
+    plan_hash = compute_plan_hash(plan, cfg)
+
+    write_plan(plan, root / "shard_plan.parquet")
+    (root / "shard_plan.hash").write_text(plan_hash, encoding="utf-8")
+    with (root / "rejects.jsonl").open("w", encoding="utf-8") as handle:
+        for record in rejects:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    summary = {
+        "plan_hash": plan_hash,
+        "configs": list(cfg.run.configs),
+        "utterances": plan.num_rows,
+        "rejected": len(rejects),
+        "total_chars": sum(len(t) for t in plan.column("text_spoken").to_pylist()),
+        "shards": shard_totals(plan),
+        "shard_targets": [list(pair) for pair in shard_targets(plan)],
+    }
+    (root / "plan_summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    plan_vol.commit()
+    print(json.dumps({k: v for k, v in summary.items() if k != "shard_targets"}, indent=2))
+    return summary
 
 
 @app.cls(
@@ -3796,7 +3791,7 @@ class Synthesizer:
 
 @app.local_entrypoint()
 def main(shards: str = "remaining", config_path: str = "config.yaml",
-         plan_path: str = "shard_plan.parquet", limit: int = 0) -> None:
+         summary_path: str = "plan_summary.json", limit: int = 0) -> None:
     from huggingface_hub import HfApi
 
     from meddies_tts.config import load_config
@@ -3805,26 +3800,26 @@ def main(shards: str = "remaining", config_path: str = "config.yaml",
         list_repo_paths,
         plan_hash_path,
         preflight,
-        remaining_targets,
-        shard_targets,
         upload_bytes,
     )
-    from meddies_tts.plan import read_plan
 
     cfg = load_config(Path(config_path))
-    plan = read_plan(Path(plan_path))
-    plan_hash = Path(plan_path).with_suffix(".hash").read_text(encoding="utf-8").strip()
+    # Only the small summary is read locally; shard_plan.parquet lives on the Volume
+    # and is loaded inside the container. Stage 1 (build_plan_remote) produced both.
+    summary = json.loads(Path(summary_path).read_text(encoding="utf-8"))
+    plan_hash = summary["plan_hash"]
+    all_targets = [tuple(pair) for pair in summary["shard_targets"]]
 
     api = HfApi()
     preflight(api, cfg.hf.repo_id, cfg.hf.private)          # fails in seconds, not dollars
-    for config in cfg.run.configs:
+    for config in summary["configs"]:
         check_plan_drift(api, cfg.hf.repo_id, config, plan_hash)
 
     existing = list_repo_paths(api, cfg.hf.repo_id)
     targets = (
-        remaining_targets(plan, existing)
+        [t for t in all_targets if t[1] not in existing]
         if shards == "remaining"
-        else [t for t in shard_targets(plan) if t[0] in set(shards.split(","))]
+        else [t for t in all_targets if t[0] in set(shards.split(","))]
     )
     if limit:
         targets = targets[:limit]
@@ -3832,7 +3827,7 @@ def main(shards: str = "remaining", config_path: str = "config.yaml",
         print("nothing to do — every planned shard is already published")
         return
 
-    for config in cfg.run.configs:
+    for config in summary["configs"]:
         upload_bytes(api, cfg.hf.repo_id, plan_hash.encode(), plan_hash_path(config))
 
     print(f"dispatching {len(targets)} shard(s) to {cfg.run.gpu}")
@@ -3850,14 +3845,31 @@ def main(shards: str = "remaining", config_path: str = "config.yaml",
 pip install modal && modal setup
 modal secret create huggingface HF_TOKEN=<your write-scoped token>
 
-# one-off: put the plan, config and reference audio on Volumes
-modal volume put meddies-tts-plan shard_plan.parquet /shard_plan.parquet
-modal volume put meddies-tts-plan shard_plan.hash    /shard_plan.hash
-modal volume put meddies-tts-plan config.yaml        /config.yaml
+# build the manifest locally (pure Python, no vinorm needed)
+python cli.py build-manifest --output-root output_full --out manifest.parquet
+
+# upload inputs: the manifest (~130 MB) and the reference audio
+modal volume put meddies-tts-plan manifest.parquet /manifest.parquet
+modal volume put meddies-tts-plan config.yaml      /config.yaml
 modal volume put visec-refs \
   ~/Desktop/Project/ASR-syntheticdata/data/ViSEC-processed/processed_audio_by_id \
   /processed_audio_by_id
 ```
+
+- [ ] **Step 2b: Run Stage 1 remotely, then pull the small artifacts back**
+
+```bash
+modal run app.py::build_plan_remote           # ~20 min CPU, pennies
+
+modal volume get meddies-tts-plan /plan_summary.json ./plan_summary.json
+modal volume get meddies-tts-plan /rejects.jsonl     ./rejects.jsonl
+
+python cli.py estimate --summary plan_summary.json
+head -3 rejects.jsonl        # sanity-check what the reject rule threw away
+```
+
+Expected: `plan_summary.json` reports ~709k utterances, ~473 shards and ~2.3k rejects.
+`shard_plan.parquet` stays on the Volume — it is never downloaded.
 
 - [ ] **Step 3: Fetch the model weights**
 
@@ -3990,6 +4002,7 @@ for c in 1 8 16 32 48 64; do
   sed -i '' "s/  concurrency: .*/  concurrency: $c/" config.yaml
   sed -i '' "s/  max_num_seqs: .*/  max_num_seqs: $((c > 64 ? c : 64))/" config.yaml
   modal volume put --force meddies-tts-plan config.yaml /config.yaml
+  # note: engine.* changes do not affect plan_hash, so no re-plan is needed
   echo "concurrency=$c"; modal run app.py --shards vi-00003 --limit 1
   # delete the shard from the repo between runs so it re-generates
 done
@@ -4005,7 +4018,7 @@ python scripts/pilot_report.py \
   --shards $(ls pilot_shards/*.parquet) \
   --outcomes pilot_outcomes.jsonl \
   --total-utterances $(python -c "
-from meddies_tts.plan import read_plan; print(read_plan('shard_plan.parquet').num_rows)")
+import json; print(json.load(open('plan_summary.json'))['utterances'])")
 ```
 
 Write the output, plus the concurrency sweep table and notes from **two listening
@@ -4033,7 +4046,7 @@ for i, r in enumerate(rows):
 
 - [ ] **Step 5: Re-estimate with the measured rate**
 
-Run: `python cli.py estimate --plan shard_plan.parquet --chars-per-sec <measured>`
+Run: `python cli.py estimate --summary plan_summary.json --chars-per-sec <measured>`
 Expected: corrected GPU-hours, USD and GB. **Compare against the spec's $250–400 and
 480 GB. If it differs by more than ~2×, stop and revisit scope before proceeding.**
 
@@ -4047,7 +4060,7 @@ git commit -m "docs: add pilot calibration report and measurement script"
 - [ ] **Step 7: Launch the full run (only after the report is reviewed)**
 
 ```bash
-python cli.py status --plan shard_plan.parquet
+python cli.py status --summary plan_summary.json
 modal run app.py --shards remaining
 ```
 
@@ -4063,7 +4076,8 @@ lives on the Hub and shards are atomic.
 sharded Parquet → Task 10; §3.3 manifest transport → Tasks 2 and 14; §3.4 speaker
 assignment → Task 6; §3.5 full 147-speaker pool with quality columns → Tasks 6, 7, 10;
 §3.6 normalization, rejection and chunking → Tasks 3, 4, 5; §3.7 runtime config and
-preflight → Tasks 1, 13, 14; §3.8 multi-config → Tasks 3, 7 (`CONFIG_PREFIX`), 10; §4
+preflight → Tasks 1, 13, 14; §3.3 Stage 1 on Modal CPU (vinorm is Linux-only) → Task 16
+`build_plan_remote`; §3.8 multi-config → Tasks 3, 7 (`CONFIG_PREFIX`), 10; §4
 architecture → Tasks 12, 16; §5 rejection rules → Task 4; §6 schema and shard sizing →
 Tasks 7, 10; §7 generation core → Task 12; §8 error handling and §8.1 resumption →
 Tasks 12, 13, 16; §9 QC and the pilot gate → Tasks 9, 17; §10 cost controls → Task 14
