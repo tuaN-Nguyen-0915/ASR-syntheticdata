@@ -6,7 +6,7 @@
 
 **Architecture:** Four stages. Stage 0 flattens the 2.47M-file tree into one local `manifest.parquet`. Stage 1 normalizes text, rejects degenerate utterances, assigns speakers and packs conversations into shards — all local CPU. Stage 2 runs one Modal container per shard; each loads the engine once, encodes 147 reference speakers once, then fans ~2,400 chunk requests at an `asyncio.Semaphore` so nano-vllm's continuous batcher stays fed. Stage 3 publishes the dataset card. Every module except `engine.py` and `app.py` is GPU-free and unit-testable on the dev Mac.
 
-**Tech Stack:** Python 3.11, `modal`, `nano-vllm-voxcpm`, `datasets`/`pyarrow`, `vinorm`, `num2words`, `soundfile`, `soxr`, `numpy`, `huggingface_hub`, `pytest`, `pytest-asyncio`.
+**Tech Stack:** Python 3.11, `modal`, `nano-vllm-voxcpm`, `datasets`/`pyarrow`, `num2words`, `soundfile`, `soxr`, `numpy`, `huggingface_hub`, `pytest`, `pytest-asyncio`.
 
 **Spec:** `docs/superpowers/specs/2026-07-28-meddies-tts-synthesis-design.md`
 
@@ -15,7 +15,7 @@
 - **New package is `meddies_tts/`.** The existing `meddies/` package (text extraction) is untouched by every task in this plan.
 - **Only `meddies_tts/engine.py` and `app.py` may import CUDA/GPU/Modal libraries.** Every other module must import and run on the dev Mac (Apple M2, no CUDA). Any task adding a GPU import to another module is wrong.
 - **`nano-vllm-voxcpm` cannot be installed or run locally** — it requires Linux + NVIDIA + `flash-attn` and explicitly does not support CPU. All local pipeline tests use `FakeEngine` (Task 11).
-- **`vinorm` cannot run on the dev Mac either.** It ships an x86-64 Linux ELF binary; it pip-installs on macOS but every call raises `Exec format error`. It must never appear in `requirements.txt`, only in the Modal CPU image. `VietnameseNormalizer` therefore takes its verbalizer as an injected callable so tests stub it (Task 3), and **Stage 1 runs as a Modal CPU function** (Task 16), not locally.
+- **No compiled normalizer dependency.** `vinorm` was evaluated and rejected: it ships an x86-64 Linux ELF binary that pip-installs on arm64 macOS then fails every call with `Exec format error`, and measurement showed 9 hand-written rules cover 100.00% of numeric occurrences anyway. Normalization is pure Python (Task 3), so **Stage 1 runs locally** and is fully unit-testable on the Mac.
 - **Output audio is 16 kHz mono FLAC.** VoxCPM2 emits 48 kHz; `audio.py` resamples down. Never store 48 kHz.
 - **`hf.repo_id` is `"Meddies/SynthAudio"`, set in `config.yaml`, with no default anywhere in code.** If the key is missing, fail immediately with a clear message.
 - **`engine.concurrency` must be `<= engine.max_num_seqs`.** Config validation enforces this.
@@ -519,21 +519,199 @@ git commit -m "feat: flatten output_full tree into a manifest parquet"
 
 ---
 
-### Task 3: Text normalization — markup stripping and per-language verbalizers
+### Task 3: Vietnamese number verbalization and text normalization
 
 **Files:**
+- Create: `meddies_tts/vietnamese_numbers.py`
 - Create: `meddies_tts/textprep.py`
+- Test: `tests/tts/test_vietnamese_numbers.py`
 - Test: `tests/tts/test_textprep.py`
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces: `strip_markup(text: str) -> str`; `Normalizer` Protocol with `normalize(self, text: str) -> str`; `VietnameseNormalizer(verbalize: Callable[[str], str] | None = None)`; `EnglishNormalizer()`; `get_normalizer(config: str, verbalize: Callable[[str], str] | None = None) -> Normalizer`. Task 7 calls `get_normalizer(config).normalize(text_raw)`.
+- Produces: from `vietnamese_numbers` — `number_to_words(n: int) -> str`, `decimal_to_words(text: str) -> str`, `digits_to_words(text: str) -> str`. From `textprep` — `strip_markup(text: str) -> str`, `Normalizer` Protocol with `normalize(self, text: str) -> str`, `VietnameseNormalizer`, `EnglishNormalizer`, `get_normalizer(config: str) -> Normalizer`. Task 7 calls `get_normalizer(config).normalize(text_raw)`.
 
-**Why `verbalize` is injectable:** `vinorm` ships an **x86-64 Linux ELF binary**. It pip-installs on arm64 macOS but every call dies with `OSError: [Errno 8] Exec format error` — verified directly, not assumed. Injecting the callable keeps every test runnable on the dev Mac and isolates us from vinorm API drift. Production (the Modal CPU function, Task 16) passes nothing and gets the real vinorm.
+**Why we write this instead of using `vinorm`:** measured over 58,232 utterances (81,532
+numeric occurrences) after markup stripping, **9 rules cover 100.00%** — plain integer
+76.2%, range `D-D` 17.5%, number+unit 2.9%, decimal 1.0%, fraction 0.9%, range-fraction
+0.5%, comparator 0.5%, percentage 0.3%, value-per-period 0.2%, unmatched **0**. `vinorm`
+additionally ships an x86-64 Linux binary that cannot execute on arm64 macOS. Unmatched
+text passes through unchanged, so gaps degrade to the no-normalizer baseline.
 
-**This is also why normalization is required at all.** Four real number-dense utterances were synthesized in the VoxCPM demo: only `mg` came out right; `38.5°C`, `>`, `gọi 115`, `6-7/10`, `140/90`, `20%` and multi-digit numbers were all wrong. Raising `inference_timesteps` cannot fix it — timesteps drive the diffusion decoder's audio fidelity, not word choice.
+**REVIEWER GATE — a Vietnamese speaker must approve the table in Step 2 before Step 3.**
+These are real regional/stylistic variants, not arbitrary choices, and getting one wrong
+silently corrupts the ASR transcript for every affected utterance.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing number tests**
+
+```python
+# tests/tts/test_vietnamese_numbers.py
+import pytest
+
+from meddies_tts.vietnamese_numbers import (
+    decimal_to_words,
+    digits_to_words,
+    number_to_words,
+)
+
+
+@pytest.mark.parametrize(
+    "n,expected",
+    [
+        (0, "không"), (1, "một"), (4, "bốn"), (5, "năm"), (9, "chín"),
+        (10, "mười"), (11, "mười một"), (14, "mười bốn"), (15, "mười lăm"),
+        (19, "mười chín"), (20, "hai mươi"), (21, "hai mươi mốt"),
+        (24, "hai mươi tư"), (25, "hai mươi lăm"), (31, "ba mươi mốt"),
+        (44, "bốn mươi tư"), (45, "bốn mươi lăm"), (55, "năm mươi lăm"),
+        (90, "chín mươi"), (99, "chín trăm" if False else "chín mươi chín"),
+        (100, "một trăm"), (101, "một trăm lẻ một"), (105, "một trăm lẻ năm"),
+        (110, "một trăm mười"), (115, "một trăm mười lăm"),
+        (140, "một trăm bốn mươi"), (155, "một trăm năm mươi lăm"),
+        (500, "năm trăm"), (625, "sáu trăm hai mươi lăm"),
+        (999, "chín trăm chín mươi chín"),
+        (1000, "một nghìn"), (1005, "một nghìn không trăm lẻ năm"),
+        (1050, "một nghìn không trăm năm mươi"), (1500, "một nghìn năm trăm"),
+        (2024, "hai nghìn không trăm hai mươi tư"),
+        (10_000, "mười nghìn"), (100_000, "một trăm nghìn"),
+        (1_000_000, "một triệu"), (1_500_000, "một triệu năm trăm nghìn"),
+        (2_000_000_000, "hai tỷ"),
+    ],
+)
+def test_number_to_words(n, expected):
+    assert number_to_words(n) == expected
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("38.5", "ba mươi tám phẩy năm"),
+        ("37,2", "ba mươi bảy phẩy hai"),
+        ("62,5", "sáu mươi hai phẩy năm"),
+        ("0.5", "không phẩy năm"),
+        ("1.25", "một phẩy hai năm"),
+    ],
+)
+def test_decimal_to_words(text, expected):
+    assert decimal_to_words(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [("115", "một một năm"), ("113", "một một ba"), ("911", "chín một một")],
+)
+def test_digits_to_words(text, expected):
+    assert digits_to_words(text) == expected
+
+
+def test_negative_numbers():
+    assert number_to_words(-5) == "âm năm"
+```
+
+- [ ] **Step 2: REVIEWER GATE — get the variant choices approved**
+
+Present this table to a Vietnamese speaker and record their decision. Each row is a real
+variant; change the implementation and the tests together if any is rejected.
+
+| construct | chosen | alternative | note |
+|---|---|---|---|
+| 24, 44 | `hai mươi tư` | `hai mươi bốn` | `tư` for 4 in units place when tens ≥ 20 |
+| 15, 25 | `mười lăm`, `hai mươi lăm` | — | `lăm` not `năm` after a tens digit |
+| 21, 31 | `hai mươi mốt` | — | `mốt` not `một` after a tens digit |
+| 101 | `một trăm lẻ một` | `một trăm linh một` | `lẻ` (Southern) vs `linh` (Northern) |
+| 1,000 | `một nghìn` | `một ngàn` | `nghìn` (Northern) vs `ngàn` (Southern) |
+| 1,005 | `một nghìn không trăm lẻ năm` | drop `không trăm` | formal vs colloquial |
+| 1.25 | `một phẩy hai năm` | `một phẩy hai mươi lăm` | fraction read digit-wise |
+| 115 in `gọi 115` | `một một năm` | `một trăm mười lăm` | hotline vs quantity |
+| decimal separator | `phẩy` | `chấm` | `phẩy` is standard for TTS |
+
+- [ ] **Step 3: Run the number tests to verify they fail**
+
+Run: `pytest tests/tts/test_vietnamese_numbers.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'meddies_tts.vietnamese_numbers'`
+
+- [ ] **Step 4: Write `vietnamese_numbers.py`**
+
+```python
+# meddies_tts/vietnamese_numbers.py
+"""Vietnamese number verbalization. Pure Python, no dependencies."""
+from __future__ import annotations
+
+_DIGITS = ("không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín")
+_SCALES = (("tỷ", 10**9), ("triệu", 10**6), ("nghìn", 10**3))
+
+
+def digits_to_words(text: str) -> str:
+    """Read each digit separately: '115' -> 'một một năm'. Used for hotlines."""
+    return " ".join(_DIGITS[int(ch)] for ch in text if ch.isdigit())
+
+
+def _tens(n: int) -> str:
+    if n < 10:
+        return _DIGITS[n]
+    if n < 20:
+        unit = n % 10
+        if unit == 0:
+            return "mười"
+        return "mười " + ("lăm" if unit == 5 else _DIGITS[unit])
+    ten, unit = divmod(n, 10)
+    out = f"{_DIGITS[ten]} mươi"
+    if unit == 1:
+        return out + " mốt"
+    if unit == 4:
+        return out + " tư"
+    if unit == 5:
+        return out + " lăm"
+    return out + (f" {_DIGITS[unit]}" if unit else "")
+
+
+def _hundreds(n: int, force_hundred: bool) -> str:
+    hundred, rest = divmod(n, 100)
+    if hundred == 0 and not force_hundred:
+        return _tens(rest)
+    parts = [f"{_DIGITS[hundred]} trăm"]
+    if rest == 0:
+        return parts[0]
+    parts.append(f"lẻ {_DIGITS[rest]}" if rest < 10 else _tens(rest))
+    return " ".join(parts)
+
+
+def number_to_words(n: int) -> str:
+    if n < 0:
+        return "âm " + number_to_words(-n)
+    if n < 100:
+        return _tens(n)
+    if n < 1000:
+        return _hundreds(n, force_hundred=True)
+    parts: list[str] = []
+    for name, size in _SCALES:
+        if n >= size:
+            group, n = divmod(n, size)
+            parts.append(f"{_hundreds(group, force_hundred=bool(parts))} {name}")
+    if n:
+        parts.append(_hundreds(n, force_hundred=True))
+    return " ".join(parts)
+
+
+def decimal_to_words(text: str) -> str:
+    """'38.5' / '38,5' -> 'ba mươi tám phẩy năm' (fraction read digit by digit)."""
+    whole, _, frac = text.replace(",", ".").partition(".")
+    words = number_to_words(int(whole))
+    return f"{words} phẩy {digits_to_words(frac)}" if frac else words
+```
+
+- [ ] **Step 5: Run the number tests to verify they pass**
+
+Run: `pytest tests/tts/test_vietnamese_numbers.py -v`
+Expected: 49 passed
+
+- [ ] **Step 6: Commit the number module**
+
+```bash
+git add meddies_tts/vietnamese_numbers.py tests/tts/test_vietnamese_numbers.py
+git commit -m "feat: add Vietnamese number verbalization"
+```
+
+- [ ] **Step 7: Write the failing normalizer tests**
 
 ```python
 # tests/tts/test_textprep.py
@@ -545,6 +723,8 @@ from meddies_tts.textprep import (
     get_normalizer,
     strip_markup,
 )
+
+_VN = VietnameseNormalizer()
 
 
 def test_strips_bold_markers_keeping_content():
@@ -563,46 +743,66 @@ def test_collapses_whitespace_and_newlines():
     assert strip_markup("a  b\n\n\tc") == "a b c"
 
 
-def test_keeps_digits_and_units_for_the_verbalizer():
+def test_keeps_digits_and_units_for_the_normalizer():
     assert strip_markup("**Sốt cao (>38.5°C)**") == "Sốt cao (>38.5°C)"
-
-
-def test_strips_leading_and_trailing_space():
-    assert strip_markup("   xin chào   ") == "xin chào"
 
 
 def test_empty_input_returns_empty():
     assert strip_markup("") == ""
+    assert _VN.normalize("") == ""
 
 
-def test_vietnamese_normalizer_strips_then_verbalizes():
-    calls = []
-
-    def fake_verbalize(text):
-        calls.append(text)
-        return text.replace("38.5", "ba mươi tám phẩy năm")
-
-    result = VietnameseNormalizer(fake_verbalize).normalize("**Sốt** 38.5 độ")
-    assert calls == ["Sốt 38.5 độ"]
-    assert result == "Sốt ba mươi tám phẩy năm độ"
+def test_comparator_and_decimal_and_degrees():
+    assert _VN.normalize("Sốt cao (>38.5°C) thì đi khám.") == (
+        "Sốt cao (trên ba mươi tám phẩy năm độ C) thì đi khám."
+    )
 
 
-def test_vietnamese_normalizer_propagates_verbalizer_failure():
-    def boom(text):
-        raise RuntimeError("vinorm exploded")
+def test_hotline_is_read_digit_by_digit():
+    assert _VN.normalize("hoặc gọi 115 nếu cần") == "hoặc gọi một một năm nếu cần"
 
-    with pytest.raises(RuntimeError, match="vinorm exploded"):
-        VietnameseNormalizer(boom).normalize("xin chào")
+
+def test_range_and_fraction():
+    assert _VN.normalize("Mức độ đau 6-7/10, kéo dài 10-15 phút.") == (
+        "Mức độ đau sáu đến bảy trên mười, kéo dài mười đến mười lăm phút."
+    )
+
+
+def test_dosage_with_units_and_period():
+    assert _VN.normalize("Metformin 1000mg/ngày (2 viên 500mg).") == (
+        "Metformin một nghìn mi-li-gam mỗi ngày (hai viên năm trăm mi-li-gam)."
+    )
+
+
+def test_percentage():
+    assert _VN.normalize("(20% Drysol)") == "(hai mươi phần trăm Drysol)"
+
+
+def test_blood_pressure_keeps_its_trailing_unit():
+    assert _VN.normalize("Huyết áp là 140/90 mmHg.") == (
+        "Huyết áp là một trăm bốn mươi trên chín mươi mi-li-mét thuỷ ngân."
+    )
+
+
+def test_latin_drug_names_pass_through_untouched():
+    assert "Amlodipine" in _VN.normalize("dùng Amlodipine 5mg")
+
+
+def test_text_without_digits_is_only_markup_stripped():
+    assert _VN.normalize("**Xin chào bác sĩ.**") == "Xin chào bác sĩ."
+
+
+def test_no_digits_remain_after_normalization():
+    text = "Uống 625mg, 3 lần mỗi ngày trong 7-10 ngày, sốt >38.5°C, 140/90 mmHg, 20%."
+    assert not any(ch.isdigit() for ch in _VN.normalize(text))
+
+
+def test_output_has_no_double_spaces():
+    assert "  " not in _VN.normalize("Nhiệt độ 37,2 độ, mạch 80 lần mỗi phút.")
 
 
 def test_english_normalizer_verbalizes_integers():
     assert EnglishNormalizer().normalize("call 115 now") == "call one hundred and fifteen now"
-
-
-def test_english_normalizer_verbalizes_decimals():
-    assert EnglishNormalizer().normalize("a 38.5 reading") == (
-        "a thirty-eight point five reading"
-    )
 
 
 def test_english_normalizer_strips_markup_first():
@@ -610,7 +810,7 @@ def test_english_normalizer_strips_markup_first():
 
 
 def test_get_normalizer_selects_by_config():
-    assert isinstance(get_normalizer("vietnamese", lambda t: t), VietnameseNormalizer)
+    assert isinstance(get_normalizer("vietnamese"), VietnameseNormalizer)
     assert isinstance(get_normalizer("english"), EnglishNormalizer)
 
 
@@ -619,22 +819,27 @@ def test_get_normalizer_rejects_unknown_config():
         get_normalizer("klingon")
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 8: Run the normalizer tests to verify they fail**
 
 Run: `pytest tests/tts/test_textprep.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'meddies_tts.textprep'`
 
-- [ ] **Step 3: Write the implementation**
+- [ ] **Step 9: Write `textprep.py`**
 
 ```python
 # meddies_tts/textprep.py
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
 from typing import Protocol
 
 from num2words import num2words
+
+from meddies_tts.vietnamese_numbers import (
+    decimal_to_words,
+    digits_to_words,
+    number_to_words,
+)
 
 _BOLD = re.compile(r"\*{1,3}")
 _BULLET = re.compile(r"(?:(?<=\n)|^)\s*[-*•]\s+", re.MULTILINE)
@@ -642,6 +847,17 @@ _ORDERED = re.compile(r"(?:(?<=\n)|^)\s*\d+[.)]\s+", re.MULTILINE)
 _HEADING = re.compile(r"(?:(?<=\n)|^)\s*#{1,6}\s*", re.MULTILINE)
 _WHITESPACE = re.compile(r"\s+")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
+
+_HOTLINES = {"113", "114", "115", "911"}
+_UNITS = {
+    "mg": "mi-li-gam", "ml": "mi-li-lít", "kg": "ki-lô-gam", "g": "gam",
+    "lít": "lít", "mmhg": "mi-li-mét thuỷ ngân", "cm": "xen-ti-mét",
+    "mm": "mi-li-mét", "°c": "độ C", "%": "phần trăm",
+    "viên": "viên", "lần": "lần",
+}
+_PERIODS = {"ngày": "mỗi ngày", "tuần": "mỗi tuần", "giờ": "mỗi giờ",
+            "lần": "mỗi lần", "phút": "mỗi phút"}
+_UNIT_ALT = "°C|%|mmHg|mg|ml|kg|cm|mm|lít|viên|lần|g"
 
 
 def strip_markup(text: str) -> str:
@@ -657,26 +873,73 @@ class Normalizer(Protocol):
     def normalize(self, text: str) -> str: ...
 
 
-def _default_vinorm() -> Callable[[str], str]:
-    from vinorm import TTSnorm
+def _unit(token: str) -> str:
+    return _UNITS.get(token.lower().strip(), token)
 
-    def verbalize(text: str) -> str:
-        return TTSnorm(text, punc=False, unknown=False, lower=False, rule=False)
 
-    return verbalize
+def _int_or_decimal(token: str) -> str:
+    return decimal_to_words(token) if re.search(r"[.,]", token) else number_to_words(int(token))
+
+
+def _normalize_numbers(text: str) -> str:
+    """The 9 measured rules, applied most-specific first."""
+    out = text
+    # 1-2. comparators introducing a number
+    out = re.sub(r">\s*(?=\d)", "trên ", out)
+    out = re.sub(r"<\s*(?=\d)", "dưới ", out)
+    # 3. range-fraction: 6-7/10
+    out = re.sub(
+        r"(\d+)\s*-\s*(\d+)\s*/\s*(\d+)",
+        lambda m: f"{number_to_words(int(m[1]))} đến {number_to_words(int(m[2]))} "
+                  f"trên {number_to_words(int(m[3]))}",
+        out,
+    )
+    # 4. value + unit per period: 1000mg/ngày
+    out = re.sub(
+        rf"(\d+(?:[.,]\d+)?)\s*({_UNIT_ALT})\s*/\s*(ngày|tuần|giờ|lần|phút)",
+        lambda m: f"{_int_or_decimal(m[1])} {_unit(m[2])} {_PERIODS[m[3]]}",
+        out,
+    )
+    # 5. fraction, optionally carrying a trailing unit: 140/90 mmHg
+    out = re.sub(
+        rf"(\d+)\s*/\s*(\d+)\s*({_UNIT_ALT})?",
+        lambda m: f"{number_to_words(int(m[1]))} trên {number_to_words(int(m[2]))}"
+                  + (f" {_unit(m[3])}" if m[3] else ""),
+        out,
+    )
+    # 6. range: 2-3, 15-30
+    out = re.sub(
+        r"(?<![\d/])(\d+)\s*-\s*(\d+)(?![\d/])",
+        lambda m: f"{number_to_words(int(m[1]))} đến {number_to_words(int(m[2]))}",
+        out,
+    )
+    # 7. decimal, optionally with a unit: 38.5°C
+    out = re.sub(
+        rf"(\d+[.,]\d+)\s*({_UNIT_ALT})?",
+        lambda m: decimal_to_words(m[1]) + (f" {_unit(m[2])}" if m[2] else ""),
+        out,
+    )
+    # 8. integer + unit (incl. percentage): 500mg, 20%
+    out = re.sub(
+        rf"(\d+)\s*({_UNIT_ALT})(?![a-zA-Zà-ỹ])",
+        lambda m: f"{number_to_words(int(m[1]))} {_unit(m[2])}",
+        out,
+    )
+    # 9. any remaining integer; hotlines read digit by digit
+    out = re.sub(
+        r"\d+",
+        lambda m: digits_to_words(m[0]) if m[0] in _HOTLINES else number_to_words(int(m[0])),
+        out,
+    )
+    return _WHITESPACE.sub(" ", out).strip()
 
 
 class VietnameseNormalizer:
-    """Strip markup, then verbalize numbers/dates/units with vinorm."""
-
-    def __init__(self, verbalize: Callable[[str], str] | None = None) -> None:
-        self._verbalize = verbalize if verbalize is not None else _default_vinorm()
+    """Strip markup, then verbalize numbers and units with the 9 measured rules."""
 
     def normalize(self, text: str) -> str:
         stripped = strip_markup(text)
-        if not stripped:
-            return ""
-        return _WHITESPACE.sub(" ", self._verbalize(stripped)).strip()
+        return _normalize_numbers(stripped) if stripped else ""
 
 
 class EnglishNormalizer:
@@ -686,32 +949,65 @@ class EnglishNormalizer:
         stripped = strip_markup(text)
         if not stripped:
             return ""
-        spoken = _NUMBER.sub(lambda m: _say_number(m.group(0)), stripped)
+        spoken = _NUMBER.sub(lambda m: _say_english(m.group(0)), stripped)
         return _WHITESPACE.sub(" ", spoken).strip()
 
 
-def _say_number(token: str) -> str:
+def _say_english(token: str) -> str:
     if "." in token:
         whole, _, frac = token.partition(".")
-        digits = " ".join(num2words(int(d)) for d in frac)
-        return f"{num2words(int(whole))} point {digits}"
+        return f"{num2words(int(whole))} point {' '.join(num2words(int(d)) for d in frac)}"
     return num2words(int(token))
 
 
-def get_normalizer(config: str, verbalize: Callable[[str], str] | None = None) -> Normalizer:
+def get_normalizer(config: str) -> Normalizer:
     if config == "vietnamese":
-        return VietnameseNormalizer(verbalize)
+        return VietnameseNormalizer()
     if config == "english":
         return EnglishNormalizer()
     raise ValueError(f"no normalizer for config {config!r}")
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 10: Run the normalizer tests to verify they pass**
 
 Run: `pytest tests/tts/test_textprep.py -v`
-Expected: 14 passed
+Expected: 20 passed
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 11: Verify coverage against the real corpus**
+
+The rules were derived from measurement; confirm no digits survive on real data:
+
+```bash
+python3 - <<'EOF'
+import os, random
+from meddies_tts.textprep import VietnameseNormalizer
+random.seed(5)
+vn, root = VietnameseNormalizer(), "output_full/vietnamese"
+dis = sorted(os.listdir(root)); random.shuffle(dis)
+checked = leftover = 0
+for d in dis[:40]:
+    for conv in sorted(os.listdir(f"{root}/{d}"))[:10]:
+        cp = f"{root}/{d}/{conv}"
+        if not os.path.isdir(cp): continue
+        for turn in os.listdir(cp):
+            tp = f"{cp}/{turn}"
+            if not os.path.isdir(tp): continue
+            for role in ("user", "assistant"):
+                f = f"{tp}/{role}.txt"
+                if not os.path.exists(f): continue
+                out = vn.normalize(open(f, encoding="utf-8").read())
+                checked += 1
+                if any(c.isdigit() for c in out):
+                    leftover += 1
+                    if leftover <= 5: print("LEFTOVER:", out[:160])
+print(f"checked {checked:,} utterances, {leftover} with digits remaining")
+EOF
+```
+
+Expected: `0 with digits remaining`. Any leftovers name a missing rule — add it plus a
+test before continuing.
+
+- [ ] **Step 12: Commit the normalizer**
 
 ```bash
 git add meddies_tts/textprep.py tests/tts/test_textprep.py
@@ -3173,7 +3469,7 @@ git commit -m "feat: add hub client with preflight, resume diff and drift detect
 
 **Interfaces:**
 - Consumes: everything from Tasks 1–13.
-- Produces: `main(argv: list[str] | None = None) -> int` with subcommands `build-manifest`, `preflight`, `estimate`, `status`, `show-config`, `materialize-tree`. `estimate` and `status` read the small `plan_summary.json` that Task 16's `build_plan_remote` writes, never the 300 MB plan itself.
+- Produces: `main(argv: list[str] | None = None) -> int` with subcommands `build-manifest`, `plan`, `preflight`, `estimate`, `status`, `show-config`, `materialize-tree`. Stage 1 (`plan`) runs locally because the normalizer is pure Python (Task 3).
 
 Global flags: `--config PATH` (default `config.yaml`), `--hf-repo ID` (overrides `hf.repo_id`).
 
@@ -3237,30 +3533,48 @@ def test_build_manifest_writes_parquet(workspace):
     assert read_manifest(out).num_rows == 12
 
 
+def _make_plan(workspace):
+    manifest = workspace / "manifest.parquet"
+    _run(workspace, "build-manifest", "--output-root", str(workspace / "output_full"),
+         "--out", str(manifest))
+    plan_out = workspace / "shard_plan.parquet"
+    _run(workspace, "plan", "--manifest", str(manifest),
+         "--visec", str(workspace / "ViSEC" / "processed_audio_by_id" / "metadata.csv"),
+         "--out", str(plan_out), "--rejects", str(workspace / "rejects.jsonl"))
+    return plan_out
+
+
+def test_plan_writes_plan_and_rejects(workspace):
+    plan_out = _make_plan(workspace)
+    assert read_plan(plan_out).num_rows == 12
+    assert (workspace / "rejects.jsonl").exists()
+
+
+def test_plan_packs_conversations_into_shards(workspace):
+    shards = set(read_plan(_make_plan(workspace)).column("shard_id").to_pylist())
+    assert shards == {"vi-00000", "vi-00001"}
+
+
+def test_plan_writes_a_hash_file(workspace):
+    plan_out = _make_plan(workspace)
+    assert plan_out.with_suffix(".hash").read_text(encoding="utf-8").strip()
+
+
+def test_plan_normalizes_numbers_into_text_spoken(workspace):
+    (workspace / "output_full" / "vietnamese" / "suy_gan" / "conv_0001" / "Turn1"
+     / "user.txt").write_text("Sốt cao 38.5°C, gọi 115.", encoding="utf-8")
+    rows = read_plan(_make_plan(workspace)).to_pylist()
+    row = next(r for r in rows if r["conv_id"] == "conv_0001" and r["turn"] == 1
+               and r["role"] == "user")
+    assert row["text_raw"] == "Sốt cao 38.5°C, gọi 115."
+    assert row["text_spoken"] == "Sốt cao ba mươi tám phẩy năm độ C, gọi một một năm."
+
+
 def test_estimate_reports_cost_and_storage(workspace, capsys):
-    summary = workspace / "plan_summary.json"
-    summary.write_text(json.dumps({
-        "plan_hash": "abc", "configs": ["vietnamese"], "utterances": 12,
-        "rejected": 0, "total_chars": 140_000, "shards": {"vietnamese": 2},
-        "shard_targets": [["vi-00000", "data/vietnamese/train-00000-of-00002.parquet"]],
-    }), encoding="utf-8")
-    assert _run(workspace, "estimate", "--summary", str(summary)) == 0
+    plan_out = _make_plan(workspace)
+    assert _run(workspace, "estimate", "--plan", str(plan_out)) == 0
     out = capsys.readouterr().out
     assert "GPU-hours" in out and "USD" in out and "GB" in out
-
-
-def test_estimate_scales_with_chars_per_sec(workspace, capsys):
-    summary = workspace / "plan_summary.json"
-    summary.write_text(json.dumps({
-        "plan_hash": "abc", "configs": ["vietnamese"], "utterances": 12,
-        "rejected": 0, "total_chars": 140_000, "shards": {"vietnamese": 2},
-        "shard_targets": [],
-    }), encoding="utf-8")
-    _run(workspace, "estimate", "--summary", str(summary), "--chars-per-sec", "7")
-    slow = capsys.readouterr().out
-    _run(workspace, "estimate", "--summary", str(summary), "--chars-per-sec", "28")
-    fast = capsys.readouterr().out
-    assert slow != fast
 
 
 def test_missing_repo_id_exits_nonzero(workspace, capsys):
@@ -3321,8 +3635,16 @@ from pathlib import Path
 import pyarrow.parquet as pq
 
 from meddies_tts.config import ConfigError, load_config
-from meddies_tts.manifest import build_manifest, write_manifest
+from meddies_tts.manifest import build_manifest, read_manifest, write_manifest
+from meddies_tts.plan import (
+    build_plan,
+    compute_plan_hash,
+    read_plan,
+    shard_totals,
+    write_plan,
+)
 from meddies_tts.qc import DEFAULT_CHARS_PER_SEC
+from meddies_tts.speakers import load_pool
 
 # Modal A100-40GB, USD/sec, from modal.com/pricing
 _A100_USD_PER_SEC = 0.000583
@@ -3342,19 +3664,20 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--output-root", required=True)
     p.add_argument("--out", required=True)
 
-    # NOTE: there is no local `plan` command. vinorm is an x86-64 Linux binary and
-    # cannot run on macOS, so Stage 1 is `modal run app.py::build_plan_remote` (Task 16).
-    # It writes plan_summary.json, which the commands below read instead of the
-    # 300 MB shard_plan.parquet.
+    p = sub.add_parser("plan", help="normalize, reject, assign speakers, pack shards")
+    p.add_argument("--manifest", required=True)
+    p.add_argument("--visec", required=True, help="path to ViSEC metadata.csv")
+    p.add_argument("--out", required=True)
+    p.add_argument("--rejects", required=True)
 
     p = sub.add_parser("preflight", help="verify HF token, repo and write access")
 
     p = sub.add_parser("estimate", help="project GPU-hours, cost and storage")
-    p.add_argument("--summary", required=True, help="plan_summary.json from Stage 1")
+    p.add_argument("--plan", required=True)
     p.add_argument("--chars-per-sec", type=float, default=DEFAULT_CHARS_PER_SEC)
 
     p = sub.add_parser("status", help="report done/remaining shards against the Hub")
-    p.add_argument("--summary", required=True, help="plan_summary.json from Stage 1")
+    p.add_argument("--plan", required=True)
 
     p = sub.add_parser("show-config", help="print the resolved configuration")
 
@@ -3372,6 +3695,25 @@ def _cmd_build_manifest(args, cfg) -> int:
     return 0
 
 
+def _cmd_plan(args, cfg) -> int:
+    manifest = read_manifest(Path(args.manifest))
+    pool = load_pool(Path(args.visec))
+    plan, rejects = build_plan(manifest, cfg, pool)
+
+    write_plan(plan, Path(args.out))
+    with Path(args.rejects).open("w", encoding="utf-8") as handle:
+        for record in rejects:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    plan_hash = compute_plan_hash(plan, cfg)
+    Path(args.out).with_suffix(".hash").write_text(plan_hash, encoding="utf-8")
+    print(
+        f"plan: {plan.num_rows:,} utterances, {sum(shard_totals(plan).values())} shards, "
+        f"{len(rejects):,} rejected -> {args.out} (hash {plan_hash})"
+    )
+    return 0
+
+
 def _cmd_preflight(args, cfg) -> int:
     from huggingface_hub import HfApi
 
@@ -3383,11 +3725,12 @@ def _cmd_preflight(args, cfg) -> int:
 
 
 def _cmd_estimate(args, cfg) -> int:
-    summary = json.loads(Path(args.summary).read_text(encoding="utf-8"))
-    audio_sec = summary["total_chars"] / args.chars_per_sec
+    plan = read_plan(Path(args.plan))
+    chars = sum(len(text) for text in plan.column("text_spoken").to_pylist())
+    audio_sec = chars / args.chars_per_sec
     gpu_sec = audio_sec / _AGGREGATE_SPEEDUP
-    print(f"utterances : {summary['utterances']:,}")
-    print(f"shards     : {sum(summary['shards'].values()):,}")
+    print(f"utterances : {plan.num_rows:,}")
+    print(f"shards     : {sum(shard_totals(plan).values()):,}")
     print(f"audio      : {audio_sec / 3600:,.1f} h  (at {args.chars_per_sec} chars/sec)")
     print(f"GPU-hours  : {gpu_sec / 3600:,.1f}")
     print(f"cost       : {gpu_sec * _A100_USD_PER_SEC:,.2f} USD  (A100-40GB)")
@@ -3398,18 +3741,24 @@ def _cmd_estimate(args, cfg) -> int:
 def _cmd_status(args, cfg) -> int:
     from huggingface_hub import HfApi
 
-    from meddies_tts.hub import check_plan_drift, list_repo_paths
+    from meddies_tts.hub import (
+        check_plan_drift,
+        list_repo_paths,
+        remaining_targets,
+        shard_targets,
+    )
 
-    summary = json.loads(Path(args.summary).read_text(encoding="utf-8"))
+    plan = read_plan(Path(args.plan))
+    local_hash = Path(args.plan).with_suffix(".hash").read_text(encoding="utf-8").strip()
     api = HfApi()
-    for config in summary["configs"]:
-        check_plan_drift(api, cfg.hf.repo_id, config, summary["plan_hash"])
+    for config in cfg.run.configs:
+        check_plan_drift(api, cfg.hf.repo_id, config, local_hash)
     existing = list_repo_paths(api, cfg.hf.repo_id)
-    targets = summary["shard_targets"]
-    remaining = [pair for pair in targets if pair[1] not in existing]
-    print(f"plan hash : {summary['plan_hash']}")
-    print(f"shards    : {len(targets)}")
-    print(f"done      : {len(targets) - len(remaining)}")
+    total = len(shard_targets(plan))
+    remaining = remaining_targets(plan, existing)
+    print(f"plan hash : {local_hash}")
+    print(f"shards    : {total}")
+    print(f"done      : {total - len(remaining)}")
     print(f"remaining : {len(remaining)}")
     return 0
 
@@ -3434,6 +3783,7 @@ def _cmd_materialize_tree(args, cfg) -> int:
 
 _COMMANDS = {
     "build-manifest": _cmd_build_manifest,
+    "plan": _cmd_plan,
     "preflight": _cmd_preflight,
     "estimate": _cmd_estimate,
     "status": _cmd_status,
@@ -3459,7 +3809,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/tts/test_cli_tts.py -v`
-Expected: 6 passed
+Expected: 9 passed
 
 - [ ] **Step 5: Run the whole GPU-free suite**
 
@@ -3501,7 +3851,6 @@ explicit manual run against Modal.
 # requirements-gpu.txt — installed only in the Modal image, never on the Mac
 torch>=2.5
 nano-vllm-voxcpm>=0.1
-vinorm>=2.0
 librosa>=0.10
 ```
 
@@ -3632,15 +3981,6 @@ image = (
     .add_local_python_source("meddies_tts")
 )
 
-# Stage 1 needs vinorm but no GPU. vinorm is an x86-64 Linux binary, so this cannot
-# run on the dev Mac; it also must not drag torch/flash-attn into a CPU container.
-cpu_image = (
-    modal.Image.debian_slim(python_version="3.11")
-    .pip_install_from_requirements("requirements.txt")
-    .pip_install("vinorm>=2.0")
-    .add_local_python_source("meddies_tts")
-)
-
 app = modal.App(APP_NAME)
 weights_vol = modal.Volume.from_name("voxcpm2-weights", create_if_missing=True)
 plan_vol = modal.Volume.from_name("meddies-tts-plan", create_if_missing=True)
@@ -3665,57 +4005,6 @@ def fetch_weights() -> str:
         )
     weights_vol.commit()
     return path
-
-
-@app.function(image=cpu_image, cpu=8.0, timeout=3600,
-              volumes={PLAN_DIR: plan_vol, REFS_DIR: refs_vol})
-def build_plan_remote() -> dict:
-    """Stage 1: normalize (vinorm), reject, assign speakers, pack shards.
-
-    Reads manifest.parquet and config.yaml from the plan Volume and writes
-    shard_plan.parquet, shard_plan.hash, rejects.jsonl and plan_summary.json back to
-    it. Runs here rather than locally because vinorm cannot execute on arm64 macOS.
-    """
-    from meddies_tts.config import load_config
-    from meddies_tts.hub import shard_targets
-    from meddies_tts.manifest import read_manifest
-    from meddies_tts.plan import build_plan, compute_plan_hash, shard_totals, write_plan
-    from meddies_tts.speakers import load_pool
-    from meddies_tts.textprep import VietnameseNormalizer
-
-    root = Path(PLAN_DIR)
-    cfg = load_config(root / "config.yaml")
-    manifest = read_manifest(root / "manifest.parquet")
-    pool = load_pool(Path(f"{REFS_DIR}/processed_audio_by_id/metadata.csv"))
-
-    normalizers = {}
-    if "vietnamese" in cfg.run.configs:
-        normalizers["vietnamese"] = VietnameseNormalizer()   # real vinorm
-
-    plan, rejects = build_plan(manifest, cfg, pool, normalizers)
-    plan_hash = compute_plan_hash(plan, cfg)
-
-    write_plan(plan, root / "shard_plan.parquet")
-    (root / "shard_plan.hash").write_text(plan_hash, encoding="utf-8")
-    with (root / "rejects.jsonl").open("w", encoding="utf-8") as handle:
-        for record in rejects:
-            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-
-    summary = {
-        "plan_hash": plan_hash,
-        "configs": list(cfg.run.configs),
-        "utterances": plan.num_rows,
-        "rejected": len(rejects),
-        "total_chars": sum(len(t) for t in plan.column("text_spoken").to_pylist()),
-        "shards": shard_totals(plan),
-        "shard_targets": [list(pair) for pair in shard_targets(plan)],
-    }
-    (root / "plan_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    plan_vol.commit()
-    print(json.dumps({k: v for k, v in summary.items() if k != "shard_targets"}, indent=2))
-    return summary
 
 
 @app.cls(
@@ -3791,7 +4080,7 @@ class Synthesizer:
 
 @app.local_entrypoint()
 def main(shards: str = "remaining", config_path: str = "config.yaml",
-         summary_path: str = "plan_summary.json", limit: int = 0) -> None:
+         plan_path: str = "shard_plan.parquet", limit: int = 0) -> None:
     from huggingface_hub import HfApi
 
     from meddies_tts.config import load_config
@@ -3800,26 +4089,26 @@ def main(shards: str = "remaining", config_path: str = "config.yaml",
         list_repo_paths,
         plan_hash_path,
         preflight,
+        remaining_targets,
+        shard_targets,
         upload_bytes,
     )
+    from meddies_tts.plan import read_plan
 
     cfg = load_config(Path(config_path))
-    # Only the small summary is read locally; shard_plan.parquet lives on the Volume
-    # and is loaded inside the container. Stage 1 (build_plan_remote) produced both.
-    summary = json.loads(Path(summary_path).read_text(encoding="utf-8"))
-    plan_hash = summary["plan_hash"]
-    all_targets = [tuple(pair) for pair in summary["shard_targets"]]
+    plan = read_plan(Path(plan_path))
+    plan_hash = Path(plan_path).with_suffix(".hash").read_text(encoding="utf-8").strip()
 
     api = HfApi()
     preflight(api, cfg.hf.repo_id, cfg.hf.private)          # fails in seconds, not dollars
-    for config in summary["configs"]:
+    for config in cfg.run.configs:
         check_plan_drift(api, cfg.hf.repo_id, config, plan_hash)
 
     existing = list_repo_paths(api, cfg.hf.repo_id)
     targets = (
-        [t for t in all_targets if t[1] not in existing]
+        remaining_targets(plan, existing)
         if shards == "remaining"
-        else [t for t in all_targets if t[0] in set(shards.split(","))]
+        else [t for t in shard_targets(plan) if t[0] in set(shards.split(","))]
     )
     if limit:
         targets = targets[:limit]
@@ -3827,7 +4116,7 @@ def main(shards: str = "remaining", config_path: str = "config.yaml",
         print("nothing to do — every planned shard is already published")
         return
 
-    for config in summary["configs"]:
+    for config in cfg.run.configs:
         upload_bytes(api, cfg.hf.repo_id, plan_hash.encode(), plan_hash_path(config))
 
     print(f"dispatching {len(targets)} shard(s) to {cfg.run.gpu}")
@@ -3845,31 +4134,24 @@ def main(shards: str = "remaining", config_path: str = "config.yaml",
 pip install modal && modal setup
 modal secret create huggingface HF_TOKEN=<your write-scoped token>
 
-# build the manifest locally (pure Python, no vinorm needed)
+# Stage 0 + 1, both local and pure Python
 python cli.py build-manifest --output-root output_full --out manifest.parquet
+python cli.py plan --manifest manifest.parquet \
+  --visec ~/Desktop/Project/ASR-syntheticdata/data/ViSEC-processed/processed_audio_by_id/metadata.csv \
+  --out shard_plan.parquet --rejects rejects.jsonl
+python cli.py estimate --plan shard_plan.parquet
+head -3 rejects.jsonl        # sanity-check what the reject rule threw away
 
-# upload inputs: the manifest (~130 MB) and the reference audio
-modal volume put meddies-tts-plan manifest.parquet /manifest.parquet
-modal volume put meddies-tts-plan config.yaml      /config.yaml
+# upload the plan, config and reference audio
+modal volume put meddies-tts-plan shard_plan.parquet /shard_plan.parquet
+modal volume put meddies-tts-plan shard_plan.hash    /shard_plan.hash
+modal volume put meddies-tts-plan config.yaml        /config.yaml
 modal volume put visec-refs \
   ~/Desktop/Project/ASR-syntheticdata/data/ViSEC-processed/processed_audio_by_id \
   /processed_audio_by_id
 ```
 
-- [ ] **Step 2b: Run Stage 1 remotely, then pull the small artifacts back**
-
-```bash
-modal run app.py::build_plan_remote           # ~20 min CPU, pennies
-
-modal volume get meddies-tts-plan /plan_summary.json ./plan_summary.json
-modal volume get meddies-tts-plan /rejects.jsonl     ./rejects.jsonl
-
-python cli.py estimate --summary plan_summary.json
-head -3 rejects.jsonl        # sanity-check what the reject rule threw away
-```
-
-Expected: `plan_summary.json` reports ~709k utterances, ~473 shards and ~2.3k rejects.
-`shard_plan.parquet` stays on the Volume — it is never downloaded.
+Expected: ~709k utterances, ~473 shards and ~2.3k rejects.
 
 - [ ] **Step 3: Fetch the model weights**
 
@@ -4018,7 +4300,7 @@ python scripts/pilot_report.py \
   --shards $(ls pilot_shards/*.parquet) \
   --outcomes pilot_outcomes.jsonl \
   --total-utterances $(python -c "
-import json; print(json.load(open('plan_summary.json'))['utterances'])")
+from meddies_tts.plan import read_plan; print(read_plan('shard_plan.parquet').num_rows)")
 ```
 
 Write the output, plus the concurrency sweep table and notes from **two listening
@@ -4027,7 +4309,7 @@ passes**, into `docs/superpowers/reports/2026-07-28-pilot_report.md`:
 1. **Speaker quality** — the same sentence across a clean-neutral speaker, speaker 79
    (whose reference is 1.3 s of looped audio), a pure-`angry` speaker, and a 4-emotion
    splice. Decides whether the full 147-speaker pool stays or gets filtered.
-2. **vinorm correctness** — 20 utterances chosen for dense numbers and units
+2. **Normalizer correctness** — 20 utterances chosen for dense numbers and units
    (`38.5°C`, `4-5/10`, `115`, dosages). Confirm each is spoken correctly. This
    replaces the automated ASR round-trip and is the *only* check on verbalized numbers,
    so do not skip it:
@@ -4046,7 +4328,7 @@ for i, r in enumerate(rows):
 
 - [ ] **Step 5: Re-estimate with the measured rate**
 
-Run: `python cli.py estimate --summary plan_summary.json --chars-per-sec <measured>`
+Run: `python cli.py estimate --plan shard_plan.parquet --chars-per-sec <measured>`
 Expected: corrected GPU-hours, USD and GB. **Compare against the spec's $250–400 and
 480 GB. If it differs by more than ~2×, stop and revisit scope before proceeding.**
 
@@ -4060,7 +4342,7 @@ git commit -m "docs: add pilot calibration report and measurement script"
 - [ ] **Step 7: Launch the full run (only after the report is reviewed)**
 
 ```bash
-python cli.py status --summary plan_summary.json
+python cli.py status --plan shard_plan.parquet
 modal run app.py --shards remaining
 ```
 
@@ -4076,8 +4358,7 @@ lives on the Hub and shards are atomic.
 sharded Parquet → Task 10; §3.3 manifest transport → Tasks 2 and 14; §3.4 speaker
 assignment → Task 6; §3.5 full 147-speaker pool with quality columns → Tasks 6, 7, 10;
 §3.6 normalization, rejection and chunking → Tasks 3, 4, 5; §3.7 runtime config and
-preflight → Tasks 1, 13, 14; §3.3 Stage 1 on Modal CPU (vinorm is Linux-only) → Task 16
-`build_plan_remote`; §3.8 multi-config → Tasks 3, 7 (`CONFIG_PREFIX`), 10; §4
+preflight → Tasks 1, 13, 14; §3.6 Vietnamese number rules → Task 3 (`vietnamese_numbers.py`); §3.8 multi-config → Tasks 3, 7 (`CONFIG_PREFIX`), 10; §4
 architecture → Tasks 12, 16; §5 rejection rules → Task 4; §6 schema and shard sizing →
 Tasks 7, 10; §7 generation core → Task 12; §8 error handling and §8.1 resumption →
 Tasks 12, 13, 16; §9 QC and the pilot gate → Tasks 9, 17; §10 cost controls → Task 14
@@ -4089,7 +4370,7 @@ layout → Tasks 7 (`shard_repo_path`), 13 (`plan_path`), 16.
 1. **No automated ASR round-trip, by design.** Removed from the spec (§9): scoring
    TTS output with Whisper is circular, the deterministic pipeline gives it no drift to
    detect, and the pilot's listening packs are a better signal. Task 17 covers the
-   residual vinorm risk with a number-heavy listening pack instead.
+   residual normalizer risk with a number-heavy listening pack instead.
 2. **The dataset card body (Appendix A.2) has no task.** Stage 3 is one hand-written
    Markdown file plus a `hub.upload_bytes` call; it is not worth a TDD cycle, but it *is*
    required by HF for large datasets and must be written before the repo is shared.

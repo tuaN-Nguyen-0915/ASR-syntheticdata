@@ -160,17 +160,10 @@ shard ids (~300 MB compressed).
 GPU containers read. `manifest.parquet` stays local as the intermediate that Stage 1
 re-plans from. The 711k-file tree never leaves the development machine.
 
-Normalization and rejection run in **Stage 1 on a Modal CPU function**, not on the GPU and
-not on the dev machine. `vinorm` ships a precompiled **x86-64 Linux ELF binary**, so it
-installs on macOS but every call fails with `Exec format error` — it cannot run on an M2 at
-all (§3.6). Stage 1 therefore executes in the Linux image, taking ~20 minutes of CPU for
-pennies.
-
-This also removes an upload: `shard_plan.parquet` (~300 MB) is written straight to the
-Modal Volume instead of being built locally and pushed. Only the smaller
-`manifest.parquet` (~130 MB) is uploaded. Keeping normalization out of the GPU image is
-still worthwhile — text is validated before any GPU time is bought, and the GPU image
-needs no vinorm.
+Normalization and rejection run **locally in Stage 1**, not on the GPU. The normalizer is
+pure Python with no compiled dependencies (§3.6), so the whole stage runs on the dev
+machine in minutes and is fully unit-testable there. Doing it up front means text is
+validated before any GPU time is bought, and the GPU image needs no normalizer at all.
 
 ### 3.4 Speaker assignment: random per conversation, fixed across turns
 
@@ -254,23 +247,51 @@ a new class rather than a branch scattered through the pipeline:
 class Normalizer(Protocol):
     def normalize(self, text: str) -> str: ...
 
-VietnameseNormalizer  # markdown strip → vinorm
-EnglishNormalizer     # markdown strip → num2words for digits/units
+VietnameseNormalizer  # markdown strip → 9 numeric rules → vietnamese_numbers
+EnglishNormalizer     # markdown strip → num2words
 ```
 
 Shared markdown stripping (emphasis, bullets, list numbering, whitespace collapse) lives
-in one function used by both. Vietnamese then runs **`vinorm`**, the standard Vietnamese
-TTS normalizer — `38.5°C` → `ba mươi tám phẩy năm độ C`. English runs `num2words` for the
-equivalent job. The normalizer is selected by the row's `config` value.
+in one function used by both. The normalizer is selected by the row's `config` value.
 
-`vinorm` is distributed as an **x86-64 Linux binary** (verified: `ELF 64-bit LSB pie
-executable, x86-64 ... for GNU/Linux 3.2.0`). It installs but cannot execute on arm64
-macOS. This is why Stage 1 runs on Modal CPU (§3.3), and why `VietnameseNormalizer` takes
-its verbalizer as an injected callable — so the wiring stays unit-testable on the dev
-machine with a stub.
+**We write the Vietnamese normalizer rather than using `vinorm`.** Two measurements drove
+this. First, `vinorm` ships an **x86-64 Linux ELF binary** (verified: `ELF 64-bit LSB pie
+executable, x86-64 ... for GNU/Linux 3.2.0`); it pip-installs on arm64 macOS and then
+fails every call with `Exec format error`, which would have forced Stage 1 off the dev
+machine. Second, and decisively, the corpus needs far fewer rules than a general-purpose
+normalizer provides. Classifying all numeric occurrences in 58,232 sampled utterances
+*after* markup stripping:
+
+| rule | occurrences | share |
+|---|---|---|
+| plain integer | 62,131 | **76.2%** |
+| range `D-D` | 14,275 | 17.5% |
+| number + unit (`mg`, `°C`, `viên`, …) | 2,327 | 2.9% |
+| decimal | 797 | 1.0% |
+| fraction `D/D` | 761 | 0.9% |
+| range-fraction `D-D/D` | 410 | 0.5% |
+| comparator `>` / `<` | 406 | 0.5% |
+| percentage | 254 | 0.3% |
+| value + unit per period (`mg/ngày`) | 171 | 0.2% |
+| **unmatched** | **0** | **0.0%** |
+
+**Nine rules cover 100.00%** of 81,532 numeric occurrences, and three quarters of the work
+is a single function — integer → Vietnamese words. That function lives in its own module,
+`vietnamese_numbers.py`, with dense unit tests.
+
+The decisive advantage is not line count but **verifiability**: `normalize("gọi 115") ==
+"gọi một một năm"` is an assertion a Vietnamese speaker can check by reading, whereas
+vinorm's behaviour can be neither inspected nor corrected. Anything the rules do not match
+passes through unchanged, so coverage gaps degrade to exactly the no-normalizer baseline
+rather than to corruption.
+
+What we give up is vinorm's handling of abbreviations and foreign words. The corpus's
+foreign words are Latin-script drug names (`Amlodipine`, `Metformin`), which VoxCPM read
+correctly in testing and which vinorm might actively worsen by imposing Vietnamese
+phonetics. The pilot's listening pack (§9) checks this.
 
 **This changes what the transcript is.** The ASR ground truth must match what was spoken,
-so every row stores both `text_raw` (original) and **`text_spoken`** (post-vinorm, what
+so every row stores both `text_raw` (original) and **`text_spoken`** (post-normalization, what
 the model actually said). Training targets `text_spoken`.
 
 **Chunking:** 12.3% of utterances exceed 1,000 chars — too long for one stable
@@ -384,14 +405,12 @@ STAGE 0  local, CPU, one-off
   output_full/vietnamese/**  ──►  manifest.parquet  (~130 MB, stays local)
   711,647 rows: config, disease_slug, disease_name, conv_id, turn, role, text_raw
 
-STAGE 1  Modal CPU function  (~20 min; vinorm is Linux-only, see §3.3)
-  manifest.parquet ──► uploaded once to a Modal Volume (~130 MB)
-  normalize (markdown strip + vinorm) ──► text_spoken
-  reject degenerate utterances (§5)   ──► rejects.jsonl
+STAGE 1  local, CPU  (minutes; pure Python, no compiled deps)
+  normalize (markdown strip + 9 numeric rules) ──► text_spoken
+  reject degenerate utterances (§5)            ──► rejects.jsonl
   assign speakers per conversation
   pack conversations into ~473 shards; a conversation is never split
-  ──► shard_plan.parquet + shard_plan.hash + plan_summary.json, written
-      directly to the Volume — no 300 MB upload
+  ──► shard_plan.parquet (~300 MB) ──► uploaded once to a Modal Volume
 
 STAGE 2  Modal, GPU     modal run app.py --shards 0-472
   per container:
@@ -428,7 +447,8 @@ Three architectures were considered:
 ```
 meddies_tts/
   manifest.py   tree → manifest parquet
-  textprep.py   markdown strip · vinorm · reject rules
+  textprep.py   markdown strip · 9 numeric rules · per-language normalizers
+  vietnamese_numbers.py   integer/decimal → Vietnamese words (pure, dense tests)
   chunking.py   sentence split · ≤400-char packing
   speakers.py   pool loading · PerConversation / PerTurn assigners
   shards.py     shard planning · parquet schema · writer
@@ -436,8 +456,7 @@ meddies_tts/
   qc.py         per-utterance sanity checks
   engine.py     nano-vllm wrapper — the ONLY GPU-dependent module
 app.py          Modal app: image, volumes, @enter, shard function
-cli.py          build-manifest · preflight · estimate · status · materialize-tree
-app.py          also hosts Stage 1 (`build_plan_remote`, CPU) — see §3.3
+cli.py          build-manifest · plan · preflight · estimate · status · materialize-tree
 ```
 
 Every module except `engine.py` and `app.py` is pure Python with no GPU import, so the
@@ -470,8 +489,8 @@ class Synthesizer:
     async def run_shard(self, shard_id: int) -> dict: ...
 ```
 
-There are two images: this GPU one, and a lightweight `cpu_image` (no torch, no
-flash-attn) carrying `vinorm` for Stage 1 (§3.3). Normalization never enters the GPU image.
+There is one image. Stage 1 runs locally (§3.3), so no normalizer ever enters the GPU
+image.
 
 VoxCPM2 weights are fetched once via `snapshot_download` onto a Modal Volume and mounted
 read-only. Two known build hazards: `flash-attn` requires `--no-build-isolation`, and
@@ -532,7 +551,7 @@ viewer and `load_dataset()` work with no loading script.
 | `turn` | int32 | 1-based |
 | `role` | string | `"user"` \| `"assistant"` |
 | `text_raw` | string | original `.txt` content |
-| `text_spoken` | string | post-vinorm — **the ASR ground truth** |
+| `text_spoken` | string | post-normalization — **the ASR ground truth** |
 | `speaker_id` | int32 | 0–146 |
 | `speaker_emotions` | string | e.g. `"angry\|happy\|neutral\|sad"` |
 | `speaker_unique_source_s` | float32 | for filtering looped-reference voices |
@@ -604,7 +623,7 @@ or nothing. A partial shard can never be mistaken for a finished one.
 
 **The plan is a stored artifact, not a recomputation.** `shard_plan.parquet` is uploaded
 to the Modal Volume *and* published to the dataset repo under `plan/`. Resuming reads that
-file rather than rebuilding it, so a newer vinorm version, a different machine, or an
+file rather than rebuilding it, so a newer normalizer version, a different machine, or an
 edited config cannot silently repartition the work and orphan finished shards.
 
 **Drift is detected, not discovered.** The plan carries a `plan_hash` over (config,
@@ -652,7 +671,7 @@ Whisper and scoring CER against `text_spoken`. It is deliberately excluded:
   Vietnamese are more informative than CER over thousands filtered through a weak
   transcriber.
 
-The residual risk this leaves is silent mispronunciation of vinorm output. It is addressed
+The residual risk this leaves is silent mispronunciation of normalizer output. It is addressed
 by listening to number-heavy samples during the pilot, and partly caught already by the
 duration check above, since garbled generation usually has anomalous duration.
 
@@ -663,10 +682,10 @@ roughly $2) produce `pilot_report.md` containing:
 - **RTF swept over concurrency ∈ {1, 8, 16, 32, 48, 64}**, fixing the semaphore value
 - a listening pack: one sentence across ~10 speakers spanning clean-neutral,
   1.3 s-looped, pure-angry and 4-emotion-splice categories
-- a second listening pack of **number- and unit-heavy utterances**, confirming vinorm's
-  output is spoken correctly. VoxCPM was measured to get these wrong without
-  normalization (§3.6), so this pack verifies the fix actually landed. It replaces the
-  automated round-trip.
+- a second listening pack of **number- and unit-heavy utterances**, confirming the
+  normalizer's output is spoken correctly. VoxCPM was measured to get these wrong without
+  normalization (§3.6), so this pack verifies the fix actually landed. It also checks that
+  Latin-script drug names survive untouched. It replaces the automated round-trip.
 
 The full run is not launched until this report is reviewed. Every cost figure in this
 document depends on the first bullet.
@@ -731,11 +750,14 @@ uploaded shard round-trips.
 3. **`ref_audio_latents` fidelity.** Without transcripts we cannot use VoxCPM's
    prompt-continuation cloning mode. Expected to be adequate; the pilot's listening pack
    will confirm.
-4. **vinorm behaviour on medical text.** Dosages, ranges (`4-5/10`), blood pressure
-   (`140/90`) and units may still verbalize oddly — vinorm is now the only thing standing
-   between the raw text and the audio, since VoxCPM alone was measured to get all of these
-   wrong (§3.6). The pilot's number-heavy listening pack is the check; there is no
-   automated one, by design (§9).
+4. **Correctness of our Vietnamese number rules.** The normalizer is the only thing
+   standing between raw text and audio, since VoxCPM alone was measured to get every
+   numeric construct except `mg` wrong (§3.6). Regional and stylistic variants must be
+   chosen deliberately and reviewed by a Vietnamese speaker: `hai mươi tư` vs
+   `hai mươi bốn`, `lẻ` vs `linh`, `nghìn` vs `ngàn`, whether `1.25` is read digit-wise,
+   and whether `115` is a hotline (`một một năm`) or a quantity
+   (`một trăm mười lăm`). The implementation plan makes this a review table, and the
+   pilot's number-heavy listening pack is the end-to-end check.
 5. ~~**HF storage tier.**~~ **Resolved.** The `Meddies` organization has multiple TB of
    storage available, comfortably covering the ~480 GB Vietnamese run and leaving room for
    English (~880 GB) later. No plan change needed.
