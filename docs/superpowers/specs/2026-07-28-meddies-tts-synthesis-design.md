@@ -135,7 +135,9 @@ That is not publishable. Hugging Face's documented limits:
 | files per repo: <100k recommended | 711,647 |
 | entries per folder: 10k **hard max** | — |
 | commit size ~50–100 files | 7,000–14,000 commits; HF warns UX degrades past a few thousand |
-| free-user public storage: "best-effort" | 480 GB likely flagged; PRO gives 10 TB |
+
+(Storage volume itself is not a constraint — the `Meddies` organization has multiple TB
+available. The problem with a mirrored tree is file *count* and commit count, not bytes.)
 
 HF explicitly recommends Parquet or WebDataset for large datasets, and requires one of
 them for the dataset viewer and script-free `load_dataset()`.
@@ -264,8 +266,8 @@ shard's Parquet metadata for provenance:
 
 ```yaml
 hf:
-  repo_id: null                 # REQUIRED, e.g. "your-name/meddies-speech"
-  private: true
+  repo_id: "Meddies/SynthAudio" # REQUIRED — no implicit default in code
+  private: false                # repo already exists and is public
   revision: "main"
   token_secret: "huggingface"   # Modal Secret holding HF_TOKEN (write scope)
 speaker:
@@ -295,13 +297,17 @@ run:
 Speaker assignment is resolved in Stage 1, which is CPU-only and takes seconds — so
 changing policy or pool costs no GPU time.
 
-**`hf.repo_id` has no default and is required.** There is no fallback repo name anywhere
-in the code: if it is unset, `plan`, `status` and the Modal entrypoint all fail
-immediately with a clear message. Defaulting a destination would risk publishing a medical
-dataset to the wrong place, so it is always an explicit choice. It can be supplied in
-`config.yaml`, overridden per-invocation with `--hf-repo`, and it is **not** part of
-`plan_hash` — retargeting the destination does not invalidate a plan or orphan finished
-shards, it just changes which repo `status` diffs against.
+**Destination:** `Meddies/SynthAudio` — a public dataset repo that currently contains only
+`.gitattributes`, so the first shard is a clean write. Its layout is specified in
+Appendix A.
+
+**`hf.repo_id` is required and has no fallback in code.** It is pinned in `config.yaml`
+rather than defaulted in a module: if the key is absent, `plan`, `status` and the Modal
+entrypoint all fail immediately with a clear message rather than inventing a destination.
+Publishing a medical dataset to the wrong repo is not a recoverable mistake. It can be
+overridden per-invocation with `--hf-repo` (useful for writing to a scratch repo during
+the pilot), and it is **not** part of `plan_hash` — retargeting does not invalidate a plan
+or orphan finished shards, it only changes which repo `status` diffs against.
 
 **Preflight before any GPU spend.** `cli.py preflight` runs before the first dispatch and
 verifies, against the configured repo:
@@ -687,10 +693,128 @@ uploaded shard round-trips.
    pack will confirm.
 4. **vinorm behaviour on medical text.** Dosages, ranges (`4-5/10`) and units may verbalize
    oddly. The 100% round-trip during the pilot surfaces this.
-5. **HF storage tier.** ~480 GB on a free account is "best-effort" and may be flagged; a
-   PRO plan provides 10 TB of public storage.
+5. ~~**HF storage tier.**~~ **Resolved.** The `Meddies` organization has multiple TB of
+   storage available, comfortably covering the ~480 GB Vietnamese run and leaving room for
+   English (~880 GB) later. No plan change needed.
 6. **Speaker diversity.** 147 speakers across ~6,900 h is ~47 h per speaker — high volume,
    low acoustic diversity. **Consciously deferred:** noted and accepted for this iteration,
    to be addressed later (more speakers, or noise/RIR/rate augmentation). The
    `speaker_id` / `speaker_emotions` / `speaker_unique_source_s` columns and the
    config-selectable speaker pool exist so that work needs no change to this pipeline.
+
+---
+
+## Appendix A — Published layout on `Meddies/SynthAudio`
+
+Verified state at time of writing: the repo exists, is **public**, and contains only
+`.gitattributes`. The first shard upload is a clean write.
+
+### A.1 File tree at completion
+
+```
+Meddies/SynthAudio
+├── README.md                                 dataset card (A.2)
+├── .gitattributes
+├── data/
+│   ├── vietnamese/
+│   │   ├── train-00000-of-00473.parquet      ~1.0 GB each
+│   │   ├── train-00001-of-00473.parquet
+│   │   └── …                                 473 files, ~480 GB
+│   └── english/                              later, same shape, ~1,100 shards
+├── plan/
+│   └── shard_plan-vi.parquet                 ~300 MB — what resumption reads (§8.1)
+└── qc/
+    ├── pilot_report.md                       §9 pilot gate output
+    ├── rejects-vi.jsonl                      rejected utterances + reason (§5)
+    └── asr_roundtrip-vi.json                 per-shard CER/WER
+```
+
+474 files rather than 711,647. `data/vietnamese/` holds 473 entries, far below HF's 10k
+per-folder hard cap, and the repo total is far below the 100k-file recommendation.
+
+Internal shard ids are `vi-00000`…`vi-00472`; filenames follow HF's
+`train-NNNNN-of-NNNNN` convention so the dataset viewer discovers them automatically.
+`plan/` and `qc/` fall outside the `data/` globs and are therefore ignored by the viewer
+while still travelling with the data.
+
+### A.2 Dataset card front matter
+
+```yaml
+---
+language: [vi]
+task_categories: [automatic-speech-recognition, text-to-speech]
+pretty_name: Meddies SynthAudio
+configs:
+  - config_name: vietnamese
+    data_files:
+      - split: train
+        path: data/vietnamese/train-*.parquet
+  - config_name: english
+    data_files:
+      - split: train
+        path: data/english/train-*.parquet
+dataset_info:
+  - config_name: vietnamese
+    features:
+      - {name: config,           dtype: string}
+      - {name: disease_slug,     dtype: string}
+      - {name: disease_name,     dtype: string}
+      - {name: conv_id,          dtype: string}
+      - {name: turn,             dtype: int32}
+      - {name: role,             dtype: string}
+      - {name: text_raw,         dtype: string}
+      - {name: text_spoken,      dtype: string}
+      - {name: speaker_id,       dtype: int32}
+      - {name: speaker_emotions, dtype: string}
+      - {name: speaker_unique_source_s, dtype: float32}
+      - {name: audio,            dtype: {audio: {sampling_rate: 16000}}}
+      - {name: duration_s,       dtype: float32}
+      - {name: n_chunks,         dtype: int32}
+      - {name: seed,             dtype: int64}
+      - {name: engine_version,   dtype: string}
+---
+```
+
+The `english` config is declared from the start; until English shards exist its glob
+matches nothing. Declaring it up front means enabling English is an upload, not a card
+migration.
+
+The card body must document (HF requires a card for large datasets): that the audio is
+**synthetic**, generated by VoxCPM2 from ViSEC reference speakers; that consultations are
+LLM-generated and carry **no clinical authority**; the `text_raw` vs `text_spoken`
+distinction; and the speaker-quality caveats from §3.5.
+
+### A.3 Example row
+
+| column | value |
+|---|---|
+| `config` | `vietnamese` |
+| `disease_slug` | `ap_xe_hau_mon` |
+| `disease_name` | `Áp xe hậu môn` |
+| `conv_id` / `turn` / `role` | `conv_0002` / `5` / `assistant` |
+| `text_raw` | `**Về tình trạng của em**: … - **Apxe hậu môn**: Túi mủ … Sốt cao (>38.5°C) … gọi 115 nếu cần` |
+| `text_spoken` | `Về tình trạng của em: … Apxe hậu môn: Túi mủ … Sốt cao trên ba mươi tám phẩy năm độ C … gọi một một năm nếu cần` |
+| `speaker_id` / `speaker_emotions` | `73` / `angry\|happy\|neutral\|sad` |
+| `speaker_unique_source_s` | `412.7` |
+| `audio` | `{bytes: <FLAC>, path: "vietnamese/ap_xe_hau_mon/conv_0002/Turn5/assistant.flac"}` |
+| `duration_s` / `n_chunks` / `seed` | `41.2` / `4` / `7318…` |
+
+The `text_raw` → `text_spoken` transformation shown here is why both columns exist:
+**`text_spoken` is the ASR target**, because it is what the audio says. `audio.path`
+preserves the original `output_full` tree shape, which is what `cli.py materialize-tree`
+reconstructs from.
+
+### A.4 Consumption
+
+```python
+ds = load_dataset("Meddies/SynthAudio", "vietnamese", split="train", streaming=True)
+
+# a whole conversation, speaker-consistent across turns
+ds.filter(lambda r: r["disease_slug"] == "ap_xe_hau_mon" and r["conv_id"] == "conv_0002")
+
+# exclude reference voices cloned from looped snippets (§3.5)
+ds.filter(lambda r: r["speaker_unique_source_s"] >= 12)
+```
+
+The viewer renders playable audio beside `text_spoken`, making it the fastest way to
+spot-check the pilot's first three shards.
