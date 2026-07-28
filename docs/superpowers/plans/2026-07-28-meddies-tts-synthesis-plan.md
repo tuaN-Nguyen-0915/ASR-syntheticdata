@@ -538,6 +538,16 @@ numeric occurrences) after markup stripping, **9 rules cover 100.00%** — plain
 additionally ships an x86-64 Linux binary that cannot execute on arm64 macOS. Unmatched
 text passes through unchanged, so gaps degrade to the no-normalizer baseline.
 
+**This task also fixes an upstream data bug.** `meddies/think_strip.py` handles only the
+literal `<think>`/`</think>` pair, so other reasoning tags — `<thinking>`,
+`<internal_reasoning>`, `<phase_check>`, `</tool_call>`, and unclosed `<think>` — leak
+into `output_full`. Measured: **2.77% of Vietnamese utterances** carry leaked reasoning,
+and in **100%** of those a real utterance survives underneath (one sample: 560 chars of
+reasoning wrapping a valid 51-char turn). Extrapolated, ~19,700 utterances would otherwise
+be synthesized as English/Vietnamese internal monologue with wrong transcripts. So
+`strip_reasoning` strips rather than rejects, and never deletes text following an
+unmatched open tag.
+
 **REVIEWER GATE — a Vietnamese speaker must approve the table in Step 2 before Step 3.**
 These are real regional/stylistic variants, not arbitrary choices, and getting one wrong
 silently corrupts the ASR transcript for every affected utterance.
@@ -817,6 +827,61 @@ def test_get_normalizer_selects_by_config():
 def test_get_normalizer_rejects_unknown_config():
     with pytest.raises(ValueError, match="klingon"):
         get_normalizer("klingon")
+
+
+# --- leaked reasoning blocks (2.77% of utterances) ---------------------------
+
+def test_strips_a_closed_reasoning_block():
+    assert _VN.normalize(
+        "<thinking> **Giai đoạn**: Phase 4 - Closing. </thinking> Không có gì thưa Bác."
+    ) == "Không có gì thưa Bác."
+
+
+def test_strips_the_literal_think_block():
+    assert _VN.normalize("<think>lý luận</think>Chào bác sĩ.") == "Chào bác sĩ."
+
+
+def test_strips_malformed_reasoning_tags():
+    assert _VN.normalize(
+        '<internal_reasoning] ồn ào </internal_reasoning" Xin chào ạ.'
+    ) == "Xin chào ạ."
+
+
+def test_unclosed_open_tag_keeps_the_text():
+    # Never delete content we cannot prove is reasoning.
+    assert "Chào bác" in _VN.normalize("<think>lý luận chưa đóng Chào bác.")
+
+
+def test_text_without_tags_is_untouched_by_reasoning_stripping():
+    assert _VN.normalize("Câu bình thường.") == "Câu bình thường."
+
+
+# --- units and identifiers ---------------------------------------------------
+
+def test_expanded_units_are_verbalized():
+    assert _VN.normalize("vitamin 400mcg") == "vitamin bốn trăm mi-crô-gam"
+    assert _VN.normalize("khám lúc 8h") == "khám lúc tám giờ"
+    assert _VN.normalize("cao 170cm") == "cao một trăm bảy mươi xen-ti-mét"
+
+
+def test_word_per_period_slash():
+    assert _VN.normalize("30 phút/ngày, 2 lần/tuần") == (
+        "ba mươi phút mỗi ngày, hai lần mỗi tuần"
+    )
+
+
+def test_non_period_slash_becomes_a_space_not_moi():
+    # 'anh/chị' occurs 9,760 times; 'anh mỗi chị' would be nonsense.
+    assert _VN.normalize("Anh/chị ở quận/huyện nào?") == "Anh chị ở quận huyện nào?"
+
+
+@pytest.mark.parametrize("ident", ["B12", "T4", "HbA1c", "N95", "SpO2", "COVID-19"])
+def test_alphanumeric_identifiers_are_never_verbalized(ident):
+    assert ident in _VN.normalize(f"xét nghiệm {ident} bình thường")
+
+
+def test_identifier_protection_does_not_block_neighbouring_numbers():
+    assert _VN.normalize("SpO2 95%") == "SpO2 chín mươi lăm phần trăm"
 ```
 
 - [ ] **Step 8: Run the normalizer tests to verify they fail**
@@ -841,28 +906,63 @@ from meddies_tts.vietnamese_numbers import (
     number_to_words,
 )
 
+_WHITESPACE = re.compile(r"\s+")
+
+# --- leaked reasoning blocks -------------------------------------------------
+# Upstream bug: meddies/think_strip.py only knows the literal <think>/</think>
+# pair, so other reasoning tags (and unclosed <think>) survive into output_full.
+# Measured: 2.77% of Vietnamese utterances carry one, and in 100% of those a real
+# utterance is underneath -- so strip, never reject.
+_RNAME = r"think|thinking|internal[_ ]?reasoning|phase[_ ]?check|reasoning|tool_call"
+_RTAG = rf"<\s*/?\s*(?:{_RNAME})\s*[>\"\]]?"
+_REASON_BLOCK = re.compile(rf"{_RTAG}.*?<\s*/\s*(?:{_RNAME})\s*[>\"\]]?", re.DOTALL | re.I)
+_REASON_TAG = re.compile(_RTAG, re.I)
+_TAG_FRAGMENT = re.compile(r"^[A-Za-z_]{0,12}[>\"\]]\s*")
+
+# --- markdown ---------------------------------------------------------------
 _BOLD = re.compile(r"\*{1,3}")
 _BULLET = re.compile(r"(?:(?<=\n)|^)\s*[-*•]\s+", re.MULTILINE)
 _ORDERED = re.compile(r"(?:(?<=\n)|^)\s*\d+[.)]\s+", re.MULTILINE)
 _HEADING = re.compile(r"(?:(?<=\n)|^)\s*#{1,6}\s*", re.MULTILINE)
-_WHITESPACE = re.compile(r"\s+")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
+# --- numeric vocabulary (unit list measured from the corpus) ----------------
 _HOTLINES = {"113", "114", "115", "911"}
 _UNITS = {
-    "mg": "mi-li-gam", "ml": "mi-li-lít", "kg": "ki-lô-gam", "g": "gam",
-    "lít": "lít", "mmhg": "mi-li-mét thuỷ ngân", "cm": "xen-ti-mét",
-    "mm": "mi-li-mét", "°c": "độ C", "%": "phần trăm",
-    "viên": "viên", "lần": "lần",
+    "mg": "mi-li-gam", "mcg": "mi-crô-gam", "µg": "mi-crô-gam", "g": "gam",
+    "kg": "ki-lô-gam", "ml": "mi-li-lít", "l": "lít", "lít": "lít", "cc": "xê-xê",
+    "cm": "xen-ti-mét", "mm": "mi-li-mét", "m": "mét", "km": "ki-lô-mét",
+    "mmhg": "mi-li-mét thuỷ ngân", "iu": "đơn vị quốc tế", "kcal": "ki-lô-ca-lo",
+    "°c": "độ C", "%": "phần trăm", "h": "giờ",
+    "viên": "viên", "lần": "lần", "gói": "gói", "ống": "ống", "giọt": "giọt",
+    "ly": "ly", "bữa": "bữa",
 }
-_PERIODS = {"ngày": "mỗi ngày", "tuần": "mỗi tuần", "giờ": "mỗi giờ",
-            "lần": "mỗi lần", "phút": "mỗi phút"}
-_UNIT_ALT = "°C|%|mmHg|mg|ml|kg|cm|mm|lít|viên|lần|g"
+_UNIT_ALT = (
+    "°C|%|mmHg|kcal|mcg|µg|mg|ml|kg|km|cm|mm|IU|cc|lít|viên|gói|ống|giọt|ly|bữa|lần"
+    "|[gmlh]"
+)
+_PERIODS = {
+    "ngày": "mỗi ngày", "tuần": "mỗi tuần", "tháng": "mỗi tháng", "giờ": "mỗi giờ",
+    "phút": "mỗi phút", "lần": "mỗi lần", "buổi": "mỗi buổi", "năm": "mỗi năm",
+}
+_MEASURES = "lần|lít|phút|tiếng|giờ|ngày|tháng|tuần|nước|viên|gói|ống|ly|bữa|ml|mg|g|kg"
+# Letters glued (optionally via hyphen) to digits are identifiers -- B12, T4,
+# HbA1c, N95, SpO2, COVID-19 -- and must never be verbalized.
+_IDENT = re.compile(r"\b[A-Za-zÀ-ỹ]+-?\d+[A-Za-z0-9]*\b")
+
+
+def strip_reasoning(text: str) -> str:
+    """Remove leaked reasoning blocks. Never deletes text after an unmatched open tag."""
+    out = _REASON_BLOCK.sub(" ", text)
+    out = _REASON_TAG.sub(" ", out)
+    out = _TAG_FRAGMENT.sub("", out.lstrip())
+    return _WHITESPACE.sub(" ", out).strip()
 
 
 def strip_markup(text: str) -> str:
-    """Remove markdown decoration and collapse whitespace, keeping spoken content."""
-    without = _HEADING.sub("", text)
+    """Remove reasoning leakage and markdown, then collapse whitespace."""
+    without = strip_reasoning(text)
+    without = _HEADING.sub("", without)
     without = _ORDERED.sub("", without)
     without = _BULLET.sub("", without)
     without = _BOLD.sub("", without)
@@ -881,61 +981,66 @@ def _int_or_decimal(token: str) -> str:
     return decimal_to_words(token) if re.search(r"[.,]", token) else number_to_words(int(token))
 
 
+def _slot(index: int) -> str:
+    """Digit-free sentinel -- a numeric placeholder would itself get verbalized."""
+    letters = ""
+    index += 1
+    while index:
+        index, rem = divmod(index - 1, 26)
+        letters = chr(ord("A") + rem) + letters
+    return f"\x00{letters}\x00"
+
+
 def _normalize_numbers(text: str) -> str:
-    """The 9 measured rules, applied most-specific first."""
-    out = text
-    # 1-2. comparators introducing a number
+    """The measured rules, applied most-specific first."""
+    saved: list[str] = []
+
+    def stash(match: re.Match) -> str:
+        saved.append(match.group(0))
+        return _slot(len(saved) - 1)
+
+    out = _IDENT.sub(stash, text)                       # protect B12, COVID-19, HbA1c
     out = re.sub(r">\s*(?=\d)", "trên ", out)
     out = re.sub(r"<\s*(?=\d)", "dưới ", out)
-    # 3. range-fraction: 6-7/10
     out = re.sub(
         r"(\d+)\s*-\s*(\d+)\s*/\s*(\d+)",
         lambda m: f"{number_to_words(int(m[1]))} đến {number_to_words(int(m[2]))} "
-                  f"trên {number_to_words(int(m[3]))}",
-        out,
-    )
-    # 4. value + unit per period: 1000mg/ngày
+                  f"trên {number_to_words(int(m[3]))}", out)
     out = re.sub(
-        rf"(\d+(?:[.,]\d+)?)\s*({_UNIT_ALT})\s*/\s*(ngày|tuần|giờ|lần|phút)",
-        lambda m: f"{_int_or_decimal(m[1])} {_unit(m[2])} {_PERIODS[m[3]]}",
-        out,
-    )
-    # 5. fraction, optionally carrying a trailing unit: 140/90 mmHg
+        rf"(\d+(?:[.,]\d+)?)\s*({_UNIT_ALT})\s*/\s*({'|'.join(_PERIODS)})",
+        lambda m: f"{_int_or_decimal(m[1])} {_unit(m[2])} {_PERIODS[m[3]]}", out)
     out = re.sub(
         rf"(\d+)\s*/\s*(\d+)\s*({_UNIT_ALT})?",
         lambda m: f"{number_to_words(int(m[1]))} trên {number_to_words(int(m[2]))}"
-                  + (f" {_unit(m[3])}" if m[3] else ""),
-        out,
-    )
-    # 6. range: 2-3, 15-30
+                  + (f" {_unit(m[3])}" if m[3] else ""), out)
     out = re.sub(
         r"(?<![\d/])(\d+)\s*-\s*(\d+)(?![\d/])",
-        lambda m: f"{number_to_words(int(m[1]))} đến {number_to_words(int(m[2]))}",
-        out,
-    )
-    # 7. decimal, optionally with a unit: 38.5°C
+        lambda m: f"{number_to_words(int(m[1]))} đến {number_to_words(int(m[2]))}", out)
     out = re.sub(
         rf"(\d+[.,]\d+)\s*({_UNIT_ALT})?",
-        lambda m: decimal_to_words(m[1]) + (f" {_unit(m[2])}" if m[2] else ""),
-        out,
-    )
-    # 8. integer + unit (incl. percentage): 500mg, 20%
+        lambda m: decimal_to_words(m[1]) + (f" {_unit(m[2])}" if m[2] else ""), out)
     out = re.sub(
-        rf"(\d+)\s*({_UNIT_ALT})(?![a-zA-Zà-ỹ])",
-        lambda m: f"{number_to_words(int(m[1]))} {_unit(m[2])}",
-        out,
-    )
-    # 9. any remaining integer; hotlines read digit by digit
+        rf"(\d+)\s*({_UNIT_ALT})(?![A-Za-zÀ-ỹ])",
+        lambda m: f"{number_to_words(int(m[1]))} {_unit(m[2])}", out)
     out = re.sub(
-        r"\d+",
+        r"\b\d+\b",
         lambda m: digits_to_words(m[0]) if m[0] in _HOTLINES else number_to_words(int(m[0])),
-        out,
-    )
+        out)
+    # "phút/ngày" -> "phút mỗi ngày". The right side MUST be a period word, or
+    # "anh/chị" (9,760 occurrences) would become "anh mỗi chị".
+    out = re.sub(
+        rf"\b({_MEASURES})\s*/\s*({'|'.join(_PERIODS)})\b",
+        lambda m: f"{m[1]} {_PERIODS[m[2]]}", out)
+    # any other word/word slash reads naturally as a space: "anh/chị" -> "anh chị"
+    out = re.sub(r"(?<=[A-Za-zÀ-ỹ])\s*/\s*(?=[A-Za-zÀ-ỹ])", " ", out)
+
+    for index, original in enumerate(saved):
+        out = out.replace(_slot(index), original)
     return _WHITESPACE.sub(" ", out).strip()
 
 
 class VietnameseNormalizer:
-    """Strip markup, then verbalize numbers and units with the 9 measured rules."""
+    """Strip reasoning leakage and markup, then verbalize numbers and units."""
 
     def normalize(self, text: str) -> str:
         stripped = strip_markup(text)
@@ -971,7 +1076,7 @@ def get_normalizer(config: str) -> Normalizer:
 - [ ] **Step 10: Run the normalizer tests to verify they pass**
 
 Run: `pytest tests/tts/test_textprep.py -v`
-Expected: 20 passed
+Expected: 34 passed
 
 - [ ] **Step 11: Verify coverage against the real corpus**
 
@@ -1004,8 +1109,15 @@ print(f"checked {checked:,} utterances, {leftover} with digits remaining")
 EOF
 ```
 
-Expected: `0 with digits remaining`. Any leftovers name a missing rule — add it plus a
-test before continuing.
+Expected, measured on 10,771 real utterances with this exact rule set:
+
+- **reasoning tags surviving: ~3** (down from 300 before `strip_reasoning`)
+- **tokens containing `/`: ~54** (down from 347), mostly bare separators
+- **tokens containing a digit: ~84** — all protected identifiers (`B12`, `HbA1c`,
+  `T4`, `N95`, `omega-3`, `COVID-19`). These are correct and must NOT be verbalized.
+
+Adapt the snippet above to print leftovers rather than assert zero. Any leftover that is
+*not* an identifier names a missing rule — add the rule plus a test before continuing.
 
 - [ ] **Step 12: Commit the normalizer**
 

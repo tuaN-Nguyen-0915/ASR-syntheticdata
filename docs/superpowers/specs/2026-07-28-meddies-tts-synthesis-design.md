@@ -279,6 +279,17 @@ normalizer provides. Classifying all numeric occurrences in 58,232 sampled utter
 is a single function — integer → Vietnamese words. That function lives in its own module,
 `vietnamese_numbers.py`, with dense unit tests.
 
+The unit vocabulary is likewise measured, not guessed: `°C`, `mg`, `%`, `kg`, `cm`, `h`,
+`m`, `mm`, `mcg`, `ml`, `mmHg` and Vietnamese counters (`viên`, `lần`, `lít`, `gói`, `ống`)
+are all expanded explicitly rather than left to the model — VoxCPM read `mg` correctly in
+one sample, but a single sample is not evidence.
+
+Two guards matter more than the rules themselves. **Alphanumeric identifiers**
+(`B12`, `T4`, `HbA1c`, `N95`, `SpO2`, `COVID-19`) are stashed behind digit-free sentinels
+so no rule verbalizes them. And the `word/word` slash rule only produces "mỗi" when the
+right-hand side is a period word — otherwise `anh/chị`, which occurs **9,760 times**,
+would become "anh mỗi chị"; it becomes "anh chị" instead.
+
 The decisive advantage is not line count but **verifiability**: `normalize("gọi 115") ==
 "gọi một một năm"` is an assertion a Vietnamese speaker can check by reading, whereas
 vinorm's behaviour can be neither inspected nor corrected. Anything the rules do not match
@@ -502,7 +513,19 @@ it on first GPU run.
 
 ## 5. Rejection rules
 
-The upstream dataset contains LLM degeneration. The worst sampled example
+The upstream dataset contains two defects: leaked reasoning blocks and LLM degeneration.
+
+**Leaked reasoning blocks.** `meddies/think_strip.py` (Feature 1) removes only the literal
+`<think>`/`</think>` pair. The source also uses `<thinking>`, `<internal_reasoning>`,
+`<phase_check>` and `</tool_call>`, with frequent malformed terminators
+(`</internal_reasoning"`, `<internal_reasoning]`), and it leaves unclosed `<think>` blocks
+untouched by design. Measured over 10,771 Vietnamese utterances, **2.77% carry leaked
+reasoning** — roughly 19,700 across the full corpus. In **100%** of affected utterances a
+valid turn survives underneath, so `strip_reasoning` (§3.6) removes the block rather than
+rejecting the utterance, and never deletes text after an unmatched open tag. This is
+handled in the new pipeline rather than by regenerating `output_full`.
+
+**LLM degeneration.** The worst sampled example
 (`vietnamese/viem_xoang_mui_di_ung/conv_0007/Turn4/user.txt`, 75,915 chars) has 12,855
 words and 513 unique, collapsing into `... Tri Tri Tri không triệu triệu triệu tri tri`.
 Synthesized, that single utterance would be ~90 minutes of looping gibberish costing
