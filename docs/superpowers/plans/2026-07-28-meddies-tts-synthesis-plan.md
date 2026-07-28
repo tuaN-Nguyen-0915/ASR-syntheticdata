@@ -71,6 +71,7 @@ def test_loads_repo_id_and_applies_defaults(tmp_path):
     assert cfg.speaker.seed_salt == "v1"
     assert cfg.engine.concurrency == 48
     assert cfg.text.max_chars == 3000
+    assert cfg.text.chunk_chars == 168  # 12.0 s x 14.0 chars/sec
     assert cfg.run.convs_per_shard == 122
     assert cfg.run.configs == ("vietnamese",)
 
@@ -171,11 +172,19 @@ class EngineConfig:
 
 @dataclass(frozen=True)
 class TextConfig:
-    chunk_chars: int = 400
+    # VoxCPM quality degrades noticeably past ~13 s of audio per generation, so the
+    # chunk budget is expressed in SECONDS and converted using the calibrated speech
+    # rate. The pilot (Task 17) measures chars_per_sec and both values are updated.
+    chunk_target_seconds: float = 12.0
+    chars_per_sec: float = 14.0
     silence_ms: int = 250
     max_chars: int = 3000
     min_ttr: float = 0.35
     max_ngram_repeat: int = 4
+
+    @property
+    def chunk_chars(self) -> int:
+        return max(1, int(self.chunk_target_seconds * self.chars_per_sec))
 
 
 @dataclass(frozen=True)
@@ -277,7 +286,8 @@ engine:
   inference_timesteps: 10
 
 text:
-  chunk_chars: 400
+  chunk_target_seconds: 12.0    # VoxCPM degrades past ~13 s per generation
+  chars_per_sec: 14.0           # calibrated by the pilot; budget = target x this
   silence_ms: 250
   max_chars: 3000
   min_ttr: 0.35
@@ -1429,7 +1439,7 @@ Contract: every chunk is non-empty, no chunk exceeds `max_chars` unless a single
 
 ```python
 # tests/tts/test_chunking.py
-from meddies_tts.chunking import chunk_text, split_sentences
+from meddies_tts.chunking import chunk_text, split_clauses, split_sentences
 
 
 def test_splits_on_sentence_terminators():
@@ -1492,6 +1502,34 @@ def test_chunks_preserve_all_tokens_in_order():
 def test_no_chunk_is_empty_or_whitespace():
     text = "Một.  Hai.   Ba.    Bốn."
     assert all(c.strip() for c in chunk_text(text, 10))
+
+
+def test_split_clauses_uses_comma_semicolon_colon():
+    assert split_clauses("một, hai; ba: bốn") == ["một,", "hai;", "ba:", "bốn"]
+
+
+def test_long_sentence_prefers_clause_boundaries_over_whitespace():
+    # One sentence, no terminator until the end, but comma-separated.
+    sentence = ", ".join(["phần " + "x" * 30 for _ in range(6)]) + "."
+    chunks = chunk_text(sentence, 90)
+    assert all(len(c) <= 90 for c in chunks)
+    # every cut lands right after a comma, never mid-clause
+    assert all(c.endswith((",", ".")) for c in chunks[:-1])
+
+
+def test_falls_back_to_whitespace_when_a_clause_is_still_too_long():
+    sentence = "từ " * 200  # no punctuation at all
+    chunks = chunk_text(sentence, 60)
+    assert len(chunks) > 1
+    assert all(len(c) <= 60 for c in chunks)
+
+
+def test_budget_matches_the_duration_target():
+    from meddies_tts.config import TextConfig
+
+    # 12 s at 14 chars/sec
+    assert TextConfig().chunk_chars == 168
+    assert TextConfig(chunk_target_seconds=13.0, chars_per_sec=20.0).chunk_chars == 260
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1508,6 +1546,7 @@ from __future__ import annotations
 import re
 
 _SENTENCE = re.compile(r"[^.!?…]+[.!?…]+|[^.!?…]+")
+_CLAUSE = re.compile(r"[^,;:]+[,;:]+|[^,;:]+")
 
 
 def split_sentences(text: str) -> list[str]:
@@ -1515,52 +1554,66 @@ def split_sentences(text: str) -> list[str]:
     return [match.strip() for match in _SENTENCE.findall(text) if match.strip()]
 
 
-def _hard_split(sentence: str, max_chars: int) -> list[str]:
-    """Split an oversized sentence on whitespace, never mid-token."""
+def split_clauses(text: str) -> list[str]:
+    """Secondary split points: comma, semicolon, colon.
+
+    Measured: at a 13 s budget, 4.03% of sentences are too long. Splitting those at
+    clause punctuation first rescues 93.4% of them, so only 0.27% of all sentences
+    ever get cut mid-clause.
+    """
+    return [match.strip() for match in _CLAUSE.findall(text) if match.strip()]
+
+
+def _pack(pieces: list[str], max_chars: int) -> list[str]:
+    """Greedily join pieces without exceeding max_chars."""
     chunks: list[str] = []
-    current: list[str] = []
-    length = 0
-    for token in sentence.split():
-        addition = len(token) + (1 if current else 0)
-        if current and length + addition > max_chars:
-            chunks.append(" ".join(current))
-            current, length = [token], len(token)
+    current = ""
+    for piece in pieces:
+        candidate = f"{current} {piece}".strip() if current else piece
+        if current and len(candidate) > max_chars:
+            chunks.append(current)
+            current = piece
         else:
-            current.append(token)
-            length += addition
+            current = candidate
     if current:
-        chunks.append(" ".join(current))
+        chunks.append(current)
+    return chunks
+
+
+def _hard_split(sentence: str, max_chars: int) -> list[str]:
+    """Oversized sentence: try clause boundaries first, then whitespace."""
+    by_clause = _pack(split_clauses(sentence), max_chars)
+    if all(len(chunk) <= max_chars for chunk in by_clause):
+        return by_clause
+    chunks: list[str] = []
+    for clause in by_clause:
+        if len(clause) <= max_chars:
+            chunks.append(clause)
+        else:
+            chunks.extend(_pack(clause.split(), max_chars))
     return chunks
 
 
 def chunk_text(text: str, max_chars: int) -> list[str]:
-    """Pack sentences greedily into chunks of at most max_chars characters."""
-    chunks: list[str] = []
-    current: list[str] = []
-    length = 0
+    """Pack sentences into chunks of at most max_chars, splitting long ones by clause.
+
+    Three tiers, most natural first: sentence boundary -> clause punctuation ->
+    whitespace. The budget is a duration target in disguise (TextConfig.chunk_chars),
+    because VoxCPM degrades past roughly 13 s per generation.
+    """
+    pieces: list[str] = []
     for sentence in split_sentences(text):
         if len(sentence) > max_chars:
-            if current:
-                chunks.append(" ".join(current))
-                current, length = [], 0
-            chunks.extend(_hard_split(sentence, max_chars))
-            continue
-        addition = len(sentence) + (1 if current else 0)
-        if current and length + addition > max_chars:
-            chunks.append(" ".join(current))
-            current, length = [sentence], len(sentence)
+            pieces.extend(_hard_split(sentence, max_chars))
         else:
-            current.append(sentence)
-            length += addition
-    if current:
-        chunks.append(" ".join(current))
-    return chunks
+            pieces.append(sentence)
+    return _pack(pieces, max_chars)
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/tts/test_chunking.py -v`
-Expected: 13 passed
+Expected: 17 passed
 
 - [ ] **Step 5: Commit**
 
@@ -2270,7 +2323,7 @@ git commit -m "feat: add shard planning, audio paths and plan hashing"
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces: `TARGET_SAMPLE_RATE: int` (16000); `join_chunks(waves: list[np.ndarray], sample_rate: int, silence_ms: int) -> np.ndarray`; `resample(wave: np.ndarray, src_sr: int, dst_sr: int) -> np.ndarray`; `to_flac_bytes(wave: np.ndarray, sample_rate: int) -> bytes`; `duration_seconds(wave: np.ndarray, sample_rate: int) -> float`. Task 12 uses all of these.
+- Produces: `TARGET_SAMPLE_RATE: int` (16000); `match_loudness(waves: list[np.ndarray], ceiling: float = 0.99) -> list[np.ndarray]`; `join_chunks(waves: list[np.ndarray], sample_rate: int, silence_ms: int) -> np.ndarray`; `resample(wave: np.ndarray, src_sr: int, dst_sr: int) -> np.ndarray`; `to_flac_bytes(wave: np.ndarray, sample_rate: int) -> bytes`; `duration_seconds(wave: np.ndarray, sample_rate: int) -> float`. Task 12 uses all of these.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2286,6 +2339,7 @@ from meddies_tts.audio import (
     TARGET_SAMPLE_RATE,
     duration_seconds,
     join_chunks,
+    match_loudness,
     resample,
     to_flac_bytes,
 )
@@ -2372,6 +2426,48 @@ def test_flac_is_smaller_than_raw_pcm():
 
 def test_duration_seconds():
     assert duration_seconds(np.zeros(32000, dtype=np.float32), 16000) == pytest.approx(2.0)
+
+
+# --- loudness matching across independently generated chunks ------------------
+
+def _rms(wave):
+    return float(np.sqrt(np.mean(np.square(wave, dtype=np.float64))))
+
+
+def test_match_loudness_evens_out_quiet_and_loud_chunks():
+    loud, quiet = _tone(0.5) * 1.0, _tone(0.5) * 0.4
+    before = _rms(loud) / _rms(quiet)
+    a, b = match_loudness([loud, quiet, loud])[:2]
+    assert abs(_rms(a) / _rms(b) - 1.0) < abs(before - 1.0)
+
+
+def test_match_loudness_is_a_noop_for_a_single_chunk():
+    wave = _tone(0.3)
+    assert np.array_equal(match_loudness([wave])[0], wave)
+
+
+def test_match_loudness_does_not_amplify_silence():
+    silence = np.zeros(4800, dtype=np.float32)
+    out = match_loudness([_tone(0.3), silence])
+    assert _rms(out[1]) < 1e-6
+
+
+def test_match_loudness_never_clips():
+    out = match_loudness([_tone(0.3) * 0.95, _tone(0.3) * 0.2])
+    assert all(float(np.max(np.abs(w))) <= 1.0 for w in out)
+
+
+def test_match_loudness_gain_is_clamped():
+    # A chunk 10x quieter is lifted, but by at most 2x -- never to full parity.
+    out = match_loudness([_tone(0.5), _tone(0.5) * 0.1, _tone(0.5)])
+    assert _rms(out[1]) <= _rms(_tone(0.5) * 0.1) * 2.0 + 1e-9
+
+
+def test_join_applies_loudness_matching():
+    joined = join_chunks([_tone(0.5), _tone(0.5) * 0.3], 48000, 0)
+    half = len(joined) // 2
+    ratio = _rms(joined[:half]) / max(_rms(joined[half:]), 1e-9)
+    assert ratio < 3.0   # untreated this would be ~3.3
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -2394,15 +2490,47 @@ import soxr
 TARGET_SAMPLE_RATE = 16000
 
 
+def _rms(wave: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(np.square(wave, dtype=np.float64))))
+
+
+def match_loudness(waves: list[np.ndarray], ceiling: float = 0.99) -> list[np.ndarray]:
+    """Scale each chunk to the median chunk RMS.
+
+    Chunks are generated independently, so their levels drift. Untreated, that is an
+    audible step at every join -- the one artefact that makes concatenated speech
+    obviously synthetic. Gains are clamped so a near-silent chunk is not amplified into
+    noise, and the result is peak-limited to avoid clipping.
+    """
+    levels = [_rms(wave) for wave in waves]
+    usable = [level for level in levels if level > 1e-5]
+    if len(waves) < 2 or not usable:
+        return waves
+    target = float(np.median(usable))
+    matched: list[np.ndarray] = []
+    for wave, level in zip(waves, levels):
+        if level <= 1e-5:
+            matched.append(wave)
+            continue
+        gain = min(max(target / level, 0.5), 2.0)
+        scaled = wave * gain
+        peak = float(np.max(np.abs(scaled))) if scaled.size else 0.0
+        if peak > ceiling:
+            scaled = scaled * (ceiling / peak)
+        matched.append(scaled.astype(np.float32, copy=False))
+    return matched
+
+
 def join_chunks(waves: list[np.ndarray], sample_rate: int, silence_ms: int) -> np.ndarray:
-    """Concatenate generated chunks, separated by silence, with no trailing pad."""
+    """Loudness-match chunks, then concatenate with silence and no trailing pad."""
     if not waves:
         raise ValueError("join_chunks requires at least one wave")
     if len(waves) == 1:
         return waves[0].astype(np.float32, copy=False)
+    leveled = match_loudness(waves)
     gap = np.zeros(int(sample_rate * silence_ms / 1000), dtype=np.float32)
     pieces: list[np.ndarray] = []
-    for index, wave in enumerate(waves):
+    for index, wave in enumerate(leveled):
         if index:
             pieces.append(gap)
         pieces.append(wave.astype(np.float32, copy=False))
@@ -2428,7 +2556,7 @@ def duration_seconds(wave: np.ndarray, sample_rate: int) -> float:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/tts/test_audio.py -v`
-Expected: 14 passed
+Expected: 20 passed
 
 - [ ] **Step 5: Commit**
 
@@ -4528,6 +4656,37 @@ done
 Expected: aggregate throughput rises sharply from concurrency 1 to ~48 and then flattens.
 **Set `engine.concurrency` to the knee of that curve.** This is the measurement that
 justifies the whole architecture.
+
+- [ ] **Step 3b: Find the real quality ceiling per generation**
+
+An informal demo run suggested VoxCPM degrades past roughly 13 s of audio per
+generation; `chunk_target_seconds` defaults to 12.0 on that basis. Confirm it properly,
+because this parameter alone decides how many chunks the whole corpus is cut into.
+
+Take one long number-free utterance and synthesize it at
+`text.chunk_target_seconds` in {6, 10, 13, 18, 28}, keeping everything else fixed:
+
+```bash
+for secs in 6 10 13 18 28; do
+  sed -i '' "s/  chunk_target_seconds: .*/  chunk_target_seconds: $secs.0/" config.yaml
+  python cli.py plan --manifest manifest.parquet \
+    --visec ~/Desktop/Project/ASR-syntheticdata/data/ViSEC-processed/processed_audio_by_id/metadata.csv \
+    --out /tmp/plan_$secs.parquet --rejects /tmp/r.jsonl
+  echo "target=${secs}s"; python cli.py estimate --plan /tmp/plan_$secs.parquet
+done
+```
+
+Listen for two things and record both in the report:
+
+1. **Degradation within a chunk** — where does the voice start to wander? That sets the
+   upper bound on `chunk_target_seconds`.
+2. **Audible seams at the joins** — steps in loudness or pitch. `match_loudness`
+   (Task 8) handles level drift; if seams remain, raise `text.silence_ms` before
+   lowering the chunk target, since shorter chunks mean *more* joins.
+
+Set `chunk_target_seconds` just below the observed degradation point. Measured against
+the corpus: at a 13 s budget only 0.27% of sentences need a mid-clause cut, so there is
+plenty of headroom to go shorter if quality demands it.
 
 - [ ] **Step 4: Generate the report**
 

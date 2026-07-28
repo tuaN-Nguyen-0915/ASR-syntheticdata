@@ -323,13 +323,26 @@ phonetics. The pilot's listening pack (§9) checks this.
 so every row stores both `text_raw` (original) and **`text_spoken`** (post-normalization, what
 the model actually said). Training targets `text_spoken`.
 
-**Chunking:** 12.3% of utterances exceed 1,000 chars — too long for one stable
-autoregressive generation. Split on sentence boundaries, greedily pack into ≤400-char
-chunks, generate each independently against the same `ref_audio_latents`, concatenate with
-250 ms of silence. Chunks stay independent so they batch freely in the engine. 88% of
-utterances need no chunking at all. Seamless continuation via `prompt_latents` is a
-possible later upgrade; it is not used initially because it serializes chunks within an
-utterance and lets drift accumulate.
+**Chunking is bounded by duration, not character count.** Demo testing showed VoxCPM
+quality degrading past roughly **13 seconds of audio per generation**, so the budget is
+expressed as `chunk_target_seconds` (default 12.0) and converted with the calibrated
+`chars_per_sec`. An earlier 400-character budget was about twice too long.
+
+Splitting uses three tiers, most natural first: **sentence boundary → clause punctuation
+(`,` `;` `:`) → whitespace**. Measured over 29,248 normalized sentences at a 13 s budget,
+4.03% of sentences exceed it, but clause splitting rescues 93.4% of those — so only
+**0.27% of sentences** are ever cut at an unnatural point. Sentences are short to begin
+with (p50 ≈ 61 chars ≈ 4.4 s).
+
+Chunks are generated independently against the *same* `ref_audio_latents`, so voice and
+timbre are identical across a joined utterance, and they batch freely in the engine —
+shorter chunks actually improve throughput. Two artefacts are handled explicitly:
+independently generated chunks drift in level, so `match_loudness` scales each to the
+median chunk RMS (clamped, peak-limited) before concatenation; and joins get 250 ms of
+silence, which is what a speaker would do at a sentence boundary anyway.
+
+Seamless continuation via `prompt_latents` remains a possible later upgrade; it is not
+used initially because it serializes chunks within an utterance and lets drift accumulate.
 
 ### 3.7 Runtime configuration
 
@@ -354,7 +367,8 @@ engine:
   temperature: 1.0
   inference_timesteps: 10
 text:
-  chunk_chars: 400
+  chunk_target_seconds: 12.0    # VoxCPM degrades past ~13 s per generation
+  chars_per_sec: 14.0           # calibrated by the pilot; budget = target x this
   silence_ms: 250
   max_chars: 3000
   min_ttr: 0.35
