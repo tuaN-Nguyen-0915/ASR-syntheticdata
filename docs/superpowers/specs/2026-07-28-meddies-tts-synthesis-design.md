@@ -16,11 +16,14 @@ Generate one audio clip per `user.txt` / `assistant.txt` in
 for the duration of each conversation, and publish the result as a Hugging Face dataset
 suitable for training Vietnamese ASR.
 
-**In scope:** Vietnamese config only (57,756 conversations, 711,647 utterances).
+**Bulk run:** Vietnamese only (57,756 conversations, 711,647 utterances). English at full
+scale would roughly triple total cost and would be spoken by Vietnamese reference
+speakers, i.e. Vietnamese-accented English — a decision to take later, deliberately.
 
-**Out of scope:** the English config. It would roughly triple total cost and would be
-spoken by Vietnamese reference speakers, i.e. Vietnamese-accented English. It can reuse
-this pipeline unchanged later if wanted.
+**But the pipeline is multi-config from day one.** English is fully implemented, not
+stubbed: `cli.py sample --config english -n 20` generates a listening pack without
+uploading anything, and switching the bulk run to English is a config change plus a
+Stage 1 re-plan — no code change. See §3.8.
 
 ### Measured inputs
 
@@ -226,9 +229,21 @@ Measured over 10,342 sampled Vietnamese utterances:
 | ALLCAPS word | 16.1% | 4.8% / 25.8% |
 | slash `a/b` | 17.3% | 6.0% / 26.9% |
 
-**Normalization:** strip markdown emphasis, bullets and list numbering, collapse
-whitespace, then run **`vinorm`** (the standard Vietnamese TTS normalizer) to verbalize
-numbers, dates and units — `38.5°C` → `ba mươi tám phẩy năm độ C`.
+**Normalization** is a per-language strategy behind one protocol, so adding a language is
+a new class rather than a branch scattered through the pipeline:
+
+```python
+class Normalizer(Protocol):
+    def normalize(self, text: str) -> str: ...
+
+VietnameseNormalizer  # markdown strip → vinorm
+EnglishNormalizer     # markdown strip → num2words for digits/units
+```
+
+Shared markdown stripping (emphasis, bullets, list numbering, whitespace collapse) lives
+in one function used by both. Vietnamese then runs **`vinorm`**, the standard Vietnamese
+TTS normalizer — `38.5°C` → `ba mươi tám phẩy năm độ C`. English runs `num2words` for the
+equivalent job. The normalizer is selected by the row's `config` value.
 
 **This changes what the transcript is.** The ASR ground truth must match what was spoken,
 so every row stores both `text_raw` (original) and **`text_spoken`** (post-vinorm, what
@@ -274,6 +289,38 @@ run:
 
 Speaker assignment is resolved in Stage 1, which is CPU-only and takes seconds — so
 changing policy or pool costs no GPU time.
+
+### 3.8 Multi-config support
+
+`config` is a first-class dimension, never a hardcoded `"vietnamese"`:
+
+- **Manifest** — Stage 0 enumerates every config present under `output_full/`, so
+  `manifest.parquet` already contains both languages. The bulk run is narrowed by
+  `run.configs`, not by what was ingested.
+- **Normalization** — selected per row by `config` (§3.6).
+- **Reject thresholds and QC duration bounds** — `text.*` and the calibrated chars/sec are
+  keyed by config, because English and Vietnamese differ in both speech rate and typical
+  type-token ratio. Applying Vietnamese thresholds to English would silently mis-reject.
+- **Shard ids** — namespaced by config (`vi-00000-of-00473`, `en-00000-of-01100`), so the
+  two languages can be planned and run independently and neither renumbers the other.
+- **Publication** — one HF dataset repo with two configs rather than two repos:
+
+  ```
+  data/vietnamese/train-00000-of-00473.parquet
+  data/english/train-00000-of-01100.parquet
+  ```
+
+  declared via `configs:` in the dataset card, giving
+  `load_dataset("<user>/meddies-speech", "vietnamese")`. Adding English later is new files
+  in an existing repo, not a migration.
+- **Reference speakers** — unchanged. The same 147 Vietnamese speakers voice both
+  languages; English output is therefore Vietnamese-accented by construction. That is a
+  property to evaluate in the listening pack, not a bug.
+
+**Auditioning before committing:** `cli.py sample --config english -n 20` picks random
+conversations, runs the full path (normalize → chunk → generate → QC), and writes WAVs
+plus a small local Parquet for listening. It uploads nothing and needs no plan, so it is
+safe to run at any time against either language for a few cents.
 
 ---
 
@@ -334,7 +381,7 @@ meddies_tts/
   qc.py         per-utterance sanity checks · ASR round-trip
   engine.py     nano-vllm wrapper — the ONLY GPU-dependent module
 app.py          Modal app: image, volumes, @enter, shard function
-cli.py          build-manifest · plan · estimate · verify · materialize-tree
+cli.py          build-manifest · plan · estimate · status · sample · materialize-tree
 ```
 
 Every module except `engine.py` and `app.py` is pure Python with no GPU import, so the
@@ -438,8 +485,9 @@ viewer and `load_dataset()` work with no loading script.
 
 **Shard sizing:** 16 kHz 16-bit FLAC ≈ 19 KB/s of audio, so a ~1 GB shard holds ~14.6 h
 ≈ 122 conversations ≈ 1,500 utterances ≈ 12 min of A100 time. ~473 shards total, named
-`data/train-00000-of-00473.parquet`. Shards are packed from a sorted enumeration so shard
-ids are stable across re-planning, and a conversation is never split across shards.
+`data/vietnamese/train-00000-of-00473.parquet` (§3.8). Shards are packed from a sorted
+enumeration so shard ids are stable across re-planning, and a conversation is never split
+across shards.
 
 ---
 
@@ -475,10 +523,48 @@ making every chunk independently reproducible.
 | **chunk** | retry ×2 with a derived seed, then mark failed | transient engine/CUDA faults must not cost a shard |
 | **utterance** | drop, append to `failures.jsonl`, continue | one bad turn must not delete a conversation |
 | **shard** | abandon; upload nothing | upload happens only after the complete Parquet is written, so a shard is atomic and HF never holds a partial shard |
-| **run** | re-run the same `.map()` | each container checks `HfApi.file_exists(shard)` first and skips if present |
+| **run** | re-run the same `.map()` | the driver diffs the plan against what is already on the Hub and dispatches only the gap |
 
 Combined with seeded generation, re-running the full job is always safe and cheap, and a
 regenerated shard is bit-identical to the original.
+
+### 8.1 Resuming after an interruption
+
+The run must survive exhausted credits, a closed laptop, or a three-month gap, and pick up
+exactly where it stopped. Four properties make that work:
+
+**Completion state lives on the Hub, not locally.** The driver calls
+`HfApi.list_repo_files()` **once** at startup (not `file_exists` per shard — that would be
+473 round-trips), diffs it against the plan, and dispatches only missing shard ids. There
+is no local checkpoint file to lose, and resuming from a different machine works with no
+setup beyond credentials.
+
+**Shards are atomic.** Upload happens only after a complete Parquet is written, so an
+interruption — including credits running out mid-container — leaves either a whole shard
+or nothing. A partial shard can never be mistaken for a finished one.
+
+**The plan is a stored artifact, not a recomputation.** `shard_plan.parquet` is uploaded
+to the Modal Volume *and* published to the dataset repo under `plan/`. Resuming reads that
+file rather than rebuilding it, so a newer vinorm version, a different machine, or an
+edited config cannot silently repartition the work and orphan finished shards.
+
+**Drift is detected, not discovered.** The plan carries a `plan_hash` over (config,
+conversation set, speaker salt, normalization version, shard packing). Every uploaded
+shard records the hash that produced it. `cli.py status` compares the current plan against
+the hashes on the Hub and **refuses to dispatch** on a mismatch, reporting what changed
+rather than quietly writing incompatible shards next to old ones. This is the failure that
+actually bites after a long gap, so it fails loudly.
+
+```
+$ modal run app.py --shards remaining
+$ python cli.py status
+  plan  vi  plan_hash=8f3c…  473 shards
+  done  312   remaining 161   failed 0
+  spent ~$137   projected remaining ~$71   ~2.0 h at 20 containers
+```
+
+`--shards remaining` is the normal way to run; explicit ids and ranges stay available for
+the pilot and for re-doing specific shards.
 
 ---
 
@@ -517,9 +603,16 @@ document depends on the first bullet.
 ## 10. Cost controls
 
 - `cli.py estimate` projects GPU-hours, dollars and GB from the manifest before launch
+- `cli.py status` reports done / remaining / spent / projected-remaining at any time
 - `--max-shards` and Modal `max_containers` cap burn rate
 - `--budget-usd` stops dispatching new shards once projected spend is reached
 - per-shard actual cost is logged, making drift from estimate visible during the run
+
+Because completion state lives on the Hub (§8.1), budget caps and resumption compose: a
+run capped at `--budget-usd 50` stops cleanly, and the next `--shards remaining`
+continues from exactly that point whenever credits allow. The corpus is usable at every
+intermediate point — each finished shard is a valid, loadable slice of the dataset — so
+stopping early degrades size rather than breaking the artifact.
 
 ---
 
@@ -528,13 +621,18 @@ document depends on the first bullet.
 Everything except `engine.py` is GPU-free and runs on the development Mac.
 
 **Unit:**
-- `textprep` — markdown stripping, vinorm integration, rejection rules, using the real
+- `textprep` — shared markdown stripping; `VietnameseNormalizer` and `EnglishNormalizer`
+  each selected by `config`; rejection rules, using the real
   `viem_xoang_mui_di_ung/conv_0007/Turn4` degenerate text as a fixture
 - `chunking` — sentence boundaries, packing limits, a long sentence with no punctuation
 - `speakers` — determinism under a fixed salt, `A != B`, policy swap, distribution sanity
-- `shards` — a conversation is never split; shard ids stable across re-planning
+- `shards` — a conversation is never split; shard ids stable across re-planning; ids
+  namespaced per config so planning English cannot renumber Vietnamese
 - `audio` — concatenation, silence joining, 48k→16k resample, FLAC round-trip
 - `qc` — each threshold fires on a crafted failure and passes clean audio
+- `resume` — given a plan and a fake repo listing, the driver dispatches exactly the
+  missing shard ids; a changed salt/config/packing alters `plan_hash` and `status`
+  refuses to dispatch rather than writing incompatible shards
 
 **Integration with `FakeEngine`:** a stand-in implementing the same protocol as
 `engine.py` and yielding sine waves. Runs the entire Stage 2 locally, writes a real
@@ -560,6 +658,8 @@ uploaded shard round-trips.
    oddly. The 100% round-trip during the pilot surfaces this.
 5. **HF storage tier.** ~480 GB on a free account is "best-effort" and may be flagged; a
    PRO plan provides 10 TB of public storage.
-6. **Speaker diversity.** 147 speakers across ~6,900 h is ~47 h per speaker. High volume,
-   low acoustic diversity — worth weighing against augmentation before assuming more data
-   is better.
+6. **Speaker diversity.** 147 speakers across ~6,900 h is ~47 h per speaker — high volume,
+   low acoustic diversity. **Consciously deferred:** noted and accepted for this iteration,
+   to be addressed later (more speakers, or noise/RIR/rate augmentation). The
+   `speaker_id` / `speaker_emotions` / `speaker_unique_source_s` columns and the
+   config-selectable speaker pool exist so that work needs no change to this pipeline.
