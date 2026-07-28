@@ -284,6 +284,24 @@ The unit vocabulary is likewise measured, not guessed: `°C`, `mg`, `%`, `kg`, `
 are all expanded explicitly rather than left to the model — VoxCPM read `mg` correctly in
 one sample, but a single sample is not evidence.
 
+**Number words vary by speaker, deliberately.** Vietnamese has real regional variants —
+`linh`/`nghìn` (Northern) vs `lẻ`/`ngàn` (Southern), and `tư` vs `bốn` for 4 in the units
+place. Rather than picking one, each of the 147 ViSEC speakers is assigned a dialect
+deterministically from `speaker_id`, so the corpus teaches an ASR model both registers
+instead of overfitting to one, while each voice stays internally consistent — a real
+speaker does not switch dialect mid-conversation. The region pair is **coupled** (`linh`
+never appears with `ngàn`); `tư`/`bốn` is drawn independently. Verified across the pool:
+78 Northern / 69 Southern, zero mismatched pairs.
+
+This makes normalization speaker-dependent, so Stage 1 assigns speakers **before**
+normalizing. Reproducibility is unaffected: `text_spoken` is stored in the plan, so the
+published transcript always matches the audio.
+
+Settled conventions: `phẩy` as decimal separator with the fraction read digit-by-digit
+(`1.25` → `một phẩy hai năm`); `không trăm` retained (`1005` → `một nghìn không trăm linh
+năm`); and `113/114/115/911` read digit-by-digit only after they are recognized as
+hotlines, so `115 người` remains a quantity.
+
 Two guards matter more than the rules themselves. **Alphanumeric identifiers**
 (`B12`, `T4`, `HbA1c`, `N95`, `SpO2`, `COVID-19`) are stashed behind digit-free sentinels
 so no rule verbalizes them. And the `word/word` slash rule only produces "mỗi" when the

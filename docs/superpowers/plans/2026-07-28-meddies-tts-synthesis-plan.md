@@ -529,7 +529,7 @@ git commit -m "feat: flatten output_full tree into a manifest parquet"
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces: from `vietnamese_numbers` — `number_to_words(n: int) -> str`, `decimal_to_words(text: str) -> str`, `digits_to_words(text: str) -> str`. From `textprep` — `strip_markup(text: str) -> str`, `Normalizer` Protocol with `normalize(self, text: str) -> str`, `VietnameseNormalizer`, `EnglishNormalizer`, `get_normalizer(config: str) -> Normalizer`. Task 7 calls `get_normalizer(config).normalize(text_raw)`.
+- Produces: from `vietnamese_numbers` — `Dialect` frozen dataclass (`zero_filler`, `thousand`, `four`), `NORTHERN`, `SOUTHERN`, `dialect_from_seed(seed: int) -> Dialect`, `number_to_words(n: int, dialect: Dialect = NORTHERN) -> str`, `decimal_to_words(text: str, dialect: Dialect = NORTHERN) -> str`, `digits_to_words(text: str) -> str`. From `textprep` — `strip_reasoning`, `strip_markup`, `Normalizer` Protocol, `VietnameseNormalizer(dialect: Dialect = NORTHERN)`, `EnglishNormalizer`, `get_normalizer(config: str, dialect: Dialect | None = None) -> Normalizer`. Task 7 builds one normalizer per speaker and must assign speakers **before** normalizing.
 
 **Why we write this instead of using `vinorm`:** measured over 58,232 utterances (81,532
 numeric occurrences) after markup stripping, **9 rules cover 100.00%** — plain integer
@@ -559,7 +559,10 @@ silently corrupts the ASR transcript for every affected utterance.
 import pytest
 
 from meddies_tts.vietnamese_numbers import (
+    NORTHERN,
+    SOUTHERN,
     decimal_to_words,
+    dialect_from_seed,
     digits_to_words,
     number_to_words,
 )
@@ -574,12 +577,12 @@ from meddies_tts.vietnamese_numbers import (
         (24, "hai mươi tư"), (25, "hai mươi lăm"), (31, "ba mươi mốt"),
         (44, "bốn mươi tư"), (45, "bốn mươi lăm"), (55, "năm mươi lăm"),
         (90, "chín mươi"), (99, "chín trăm" if False else "chín mươi chín"),
-        (100, "một trăm"), (101, "một trăm lẻ một"), (105, "một trăm lẻ năm"),
+        (100, "một trăm"), (101, "một trăm linh một"), (105, "một trăm linh năm"),
         (110, "một trăm mười"), (115, "một trăm mười lăm"),
         (140, "một trăm bốn mươi"), (155, "một trăm năm mươi lăm"),
         (500, "năm trăm"), (625, "sáu trăm hai mươi lăm"),
         (999, "chín trăm chín mươi chín"),
-        (1000, "một nghìn"), (1005, "một nghìn không trăm lẻ năm"),
+        (1000, "một nghìn"), (1005, "một nghìn không trăm linh năm"),
         (1050, "một nghìn không trăm năm mươi"), (1500, "một nghìn năm trăm"),
         (2024, "hai nghìn không trăm hai mươi tư"),
         (10_000, "mười nghìn"), (100_000, "một trăm nghìn"),
@@ -615,24 +618,87 @@ def test_digits_to_words(text, expected):
 
 def test_negative_numbers():
     assert number_to_words(-5) == "âm năm"
+
+
+# --- per-speaker dialect -----------------------------------------------------
+
+@pytest.mark.parametrize(
+    "n,expected",
+    [
+        (101, "một trăm lẻ một"),
+        (1000, "một ngàn"),
+        (1005, "một ngàn không trăm lẻ năm"),
+        (1_500_000, "một triệu năm trăm ngàn"),
+    ],
+)
+def test_southern_dialect(n, expected):
+    assert number_to_words(n, SOUTHERN) == expected
+
+
+def test_four_follows_the_dialect():
+    from dataclasses import replace
+
+    assert number_to_words(24, replace(NORTHERN, four="tư")) == "hai mươi tư"
+    assert number_to_words(24, replace(NORTHERN, four="bốn")) == "hai mươi bốn"
+
+
+def test_fourteen_is_bon_regardless_of_dialect():
+    from dataclasses import replace
+
+    assert number_to_words(14, replace(NORTHERN, four="tư")) == "mười bốn"
+    assert number_to_words(14, replace(NORTHERN, four="bốn")) == "mười bốn"
+
+
+def test_dialect_from_seed_is_deterministic():
+    assert dialect_from_seed(12345) == dialect_from_seed(12345)
+
+
+def test_dialect_from_seed_never_mixes_registers():
+    # "linh" must always travel with "nghìn", "lẻ" with "ngàn".
+    for seed in range(500):
+        d = dialect_from_seed(seed)
+        assert (d.zero_filler == "linh") == (d.thousand == "nghìn")
+
+
+def test_dialect_from_seed_produces_both_registers():
+    assert {dialect_from_seed(s).thousand for s in range(200)} == {"nghìn", "ngàn"}
+
+
+def test_dialect_from_seed_randomizes_four_independently():
+    combos = {(dialect_from_seed(s).thousand, dialect_from_seed(s).four)
+              for s in range(300)}
+    assert len(combos) == 4
+
+
+def test_decimal_uses_dialect_for_the_whole_part():
+    assert decimal_to_words("101.5", SOUTHERN) == "một trăm lẻ một phẩy năm"
 ```
 
-- [ ] **Step 2: REVIEWER GATE — get the variant choices approved**
+- [ ] **Step 2: Confirm the approved variant table**
 
-Present this table to a Vietnamese speaker and record their decision. Each row is a real
-variant; change the implementation and the tests together if any is rejected.
+These were reviewed and approved by a Vietnamese speaker on 2026-07-28. Implement exactly
+this; do not substitute your own judgement.
 
-| construct | chosen | alternative | note |
-|---|---|---|---|
-| 24, 44 | `hai mươi tư` | `hai mươi bốn` | `tư` for 4 in units place when tens ≥ 20 |
-| 15, 25 | `mười lăm`, `hai mươi lăm` | — | `lăm` not `năm` after a tens digit |
-| 21, 31 | `hai mươi mốt` | — | `mốt` not `một` after a tens digit |
-| 101 | `một trăm lẻ một` | `một trăm linh một` | `lẻ` (Southern) vs `linh` (Northern) |
-| 1,000 | `một nghìn` | `một ngàn` | `nghìn` (Northern) vs `ngàn` (Southern) |
-| 1,005 | `một nghìn không trăm lẻ năm` | drop `không trăm` | formal vs colloquial |
-| 1.25 | `một phẩy hai năm` | `một phẩy hai mươi lăm` | fraction read digit-wise |
-| 115 in `gọi 115` | `một một năm` | `một trăm mười lăm` | hotline vs quantity |
-| decimal separator | `phẩy` | `chấm` | `phẩy` is standard for TTS |
+| construct | decision |
+|---|---|
+| 15, 25 | `mười lăm`, `hai mươi lăm` — `lăm` after a tens digit (standard, not a choice) |
+| 21, 31 | `hai mươi mốt` — `mốt` after a tens digit (standard, not a choice) |
+| 1,005 | keep `không trăm`: `một nghìn không trăm linh năm` |
+| 101 / 1,000 | **per-speaker dialect, coupled** — Northern `linh`+`nghìn` or Southern `lẻ`+`ngàn`, never mixed |
+| 24, 44 | **per-speaker random**, `tư` or `bốn`, drawn independently of region |
+| decimal separator | `phẩy` |
+| fraction | digit-by-digit: `1.25` → `một phẩy hai năm` |
+| `gọi 115` | digit-by-digit for `113/114/115/911` only; `115 người` stays a quantity |
+
+**Why the dialect is randomized per speaker:** it gives the ASR model both registers
+instead of overfitting to one, while keeping each voice internally consistent — a real
+speaker does not switch dialect mid-conversation. Verified over the 147 ViSEC speakers:
+78 Northern / 69 Southern, zero `linh`+`ngàn` mismatches, fully deterministic from
+`speaker_id`.
+
+Reproducibility is unaffected: `text_spoken` is computed in Stage 1 and **stored in the
+plan**, so the published transcript always matches the audio, and re-planning with the
+same `seed_salt` reproduces identical text.
 
 - [ ] **Step 3: Run the number tests to verify they fail**
 
@@ -643,11 +709,34 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'meddies_tts.vietnames
 
 ```python
 # meddies_tts/vietnamese_numbers.py
-"""Vietnamese number verbalization. Pure Python, no dependencies."""
+"""Vietnamese number verbalization with per-speaker dialect. Pure Python."""
 from __future__ import annotations
 
+import random
+from dataclasses import dataclass
+
 _DIGITS = ("không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín")
-_SCALES = (("tỷ", 10**9), ("triệu", 10**6), ("nghìn", 10**3))
+
+
+@dataclass(frozen=True)
+class Dialect:
+    zero_filler: str   # "linh" (Northern) | "lẻ" (Southern)
+    thousand: str      # "nghìn" (Northern) | "ngàn" (Southern)
+    four: str          # "tư" | "bốn"
+
+
+NORTHERN = Dialect("linh", "nghìn", "tư")
+SOUTHERN = Dialect("lẻ", "ngàn", "tư")
+
+# Coupled on purpose: no real speaker says "linh" alongside "ngàn".
+_REGIONS = (("linh", "nghìn"), ("lẻ", "ngàn"))
+
+
+def dialect_from_seed(seed: int) -> Dialect:
+    """Pick a dialect deterministically. Caller seeds from speaker_id (Task 7)."""
+    rng = random.Random(seed)
+    zero_filler, thousand = rng.choice(_REGIONS)
+    return Dialect(zero_filler, thousand, rng.choice(("tư", "bốn")))
 
 
 def digits_to_words(text: str) -> str:
@@ -655,7 +744,7 @@ def digits_to_words(text: str) -> str:
     return " ".join(_DIGITS[int(ch)] for ch in text if ch.isdigit())
 
 
-def _tens(n: int) -> str:
+def _tens(n: int, dialect: Dialect) -> str:
     if n < 10:
         return _DIGITS[n]
     if n < 20:
@@ -668,51 +757,52 @@ def _tens(n: int) -> str:
     if unit == 1:
         return out + " mốt"
     if unit == 4:
-        return out + " tư"
+        return out + f" {dialect.four}"
     if unit == 5:
         return out + " lăm"
     return out + (f" {_DIGITS[unit]}" if unit else "")
 
 
-def _hundreds(n: int, force_hundred: bool) -> str:
+def _hundreds(n: int, dialect: Dialect, force_hundred: bool) -> str:
     hundred, rest = divmod(n, 100)
     if hundred == 0 and not force_hundred:
-        return _tens(rest)
-    parts = [f"{_DIGITS[hundred]} trăm"]
+        return _tens(rest, dialect)
     if rest == 0:
-        return parts[0]
-    parts.append(f"lẻ {_DIGITS[rest]}" if rest < 10 else _tens(rest))
-    return " ".join(parts)
+        return f"{_DIGITS[hundred]} trăm"
+    tail = (
+        f"{dialect.zero_filler} {_DIGITS[rest]}" if rest < 10 else _tens(rest, dialect)
+    )
+    return f"{_DIGITS[hundred]} trăm {tail}"
 
 
-def number_to_words(n: int) -> str:
+def number_to_words(n: int, dialect: Dialect = NORTHERN) -> str:
     if n < 0:
-        return "âm " + number_to_words(-n)
+        return "âm " + number_to_words(-n, dialect)
     if n < 100:
-        return _tens(n)
+        return _tens(n, dialect)
     if n < 1000:
-        return _hundreds(n, force_hundred=True)
+        return _hundreds(n, dialect, force_hundred=True)
     parts: list[str] = []
-    for name, size in _SCALES:
+    for name, size in (("tỷ", 10**9), ("triệu", 10**6), (dialect.thousand, 10**3)):
         if n >= size:
             group, n = divmod(n, size)
-            parts.append(f"{_hundreds(group, force_hundred=bool(parts))} {name}")
+            parts.append(f"{_hundreds(group, dialect, force_hundred=bool(parts))} {name}")
     if n:
-        parts.append(_hundreds(n, force_hundred=True))
+        parts.append(_hundreds(n, dialect, force_hundred=True))
     return " ".join(parts)
 
 
-def decimal_to_words(text: str) -> str:
+def decimal_to_words(text: str, dialect: Dialect = NORTHERN) -> str:
     """'38.5' / '38,5' -> 'ba mươi tám phẩy năm' (fraction read digit by digit)."""
     whole, _, frac = text.replace(",", ".").partition(".")
-    words = number_to_words(int(whole))
+    words = number_to_words(int(whole), dialect)
     return f"{words} phẩy {digits_to_words(frac)}" if frac else words
 ```
 
 - [ ] **Step 5: Run the number tests to verify they pass**
 
 Run: `pytest tests/tts/test_vietnamese_numbers.py -v`
-Expected: 49 passed
+Expected: 61 passed
 
 - [ ] **Step 6: Commit the number module**
 
@@ -901,6 +991,8 @@ from typing import Protocol
 from num2words import num2words
 
 from meddies_tts.vietnamese_numbers import (
+    NORTHERN,
+    Dialect,
     decimal_to_words,
     digits_to_words,
     number_to_words,
@@ -977,8 +1069,9 @@ def _unit(token: str) -> str:
     return _UNITS.get(token.lower().strip(), token)
 
 
-def _int_or_decimal(token: str) -> str:
-    return decimal_to_words(token) if re.search(r"[.,]", token) else number_to_words(int(token))
+def _int_or_decimal(token: str, dialect: Dialect) -> str:
+    return (decimal_to_words(token, dialect) if re.search(r"[.,]", token)
+            else number_to_words(int(token), dialect))
 
 
 def _slot(index: int) -> str:
@@ -991,7 +1084,7 @@ def _slot(index: int) -> str:
     return f"\x00{letters}\x00"
 
 
-def _normalize_numbers(text: str) -> str:
+def _normalize_numbers(text: str, dialect: Dialect = NORTHERN) -> str:
     """The measured rules, applied most-specific first."""
     saved: list[str] = []
 
@@ -1004,27 +1097,27 @@ def _normalize_numbers(text: str) -> str:
     out = re.sub(r"<\s*(?=\d)", "dưới ", out)
     out = re.sub(
         r"(\d+)\s*-\s*(\d+)\s*/\s*(\d+)",
-        lambda m: f"{number_to_words(int(m[1]))} đến {number_to_words(int(m[2]))} "
-                  f"trên {number_to_words(int(m[3]))}", out)
+        lambda m: f"{number_to_words(int(m[1]), dialect)} đến {number_to_words(int(m[2]), dialect)} "
+                  f"trên {number_to_words(int(m[3]), dialect)}", out)
     out = re.sub(
         rf"(\d+(?:[.,]\d+)?)\s*({_UNIT_ALT})\s*/\s*({'|'.join(_PERIODS)})",
-        lambda m: f"{_int_or_decimal(m[1])} {_unit(m[2])} {_PERIODS[m[3]]}", out)
+        lambda m: f"{_int_or_decimal(m[1], dialect)} {_unit(m[2])} {_PERIODS[m[3]]}", out)
     out = re.sub(
         rf"(\d+)\s*/\s*(\d+)\s*({_UNIT_ALT})?",
-        lambda m: f"{number_to_words(int(m[1]))} trên {number_to_words(int(m[2]))}"
+        lambda m: f"{number_to_words(int(m[1]), dialect)} trên {number_to_words(int(m[2]), dialect)}"
                   + (f" {_unit(m[3])}" if m[3] else ""), out)
     out = re.sub(
         r"(?<![\d/])(\d+)\s*-\s*(\d+)(?![\d/])",
-        lambda m: f"{number_to_words(int(m[1]))} đến {number_to_words(int(m[2]))}", out)
+        lambda m: f"{number_to_words(int(m[1]), dialect)} đến {number_to_words(int(m[2]), dialect)}", out)
     out = re.sub(
         rf"(\d+[.,]\d+)\s*({_UNIT_ALT})?",
-        lambda m: decimal_to_words(m[1]) + (f" {_unit(m[2])}" if m[2] else ""), out)
+        lambda m: decimal_to_words(m[1], dialect) + (f" {_unit(m[2])}" if m[2] else ""), out)
     out = re.sub(
         rf"(\d+)\s*({_UNIT_ALT})(?![A-Za-zÀ-ỹ])",
-        lambda m: f"{number_to_words(int(m[1]))} {_unit(m[2])}", out)
+        lambda m: f"{number_to_words(int(m[1]), dialect)} {_unit(m[2])}", out)
     out = re.sub(
         r"\b\d+\b",
-        lambda m: digits_to_words(m[0]) if m[0] in _HOTLINES else number_to_words(int(m[0])),
+        lambda m: digits_to_words(m[0]) if m[0] in _HOTLINES else number_to_words(int(m[0]), dialect),
         out)
     # "phút/ngày" -> "phút mỗi ngày". The right side MUST be a period word, or
     # "anh/chị" (9,760 occurrences) would become "anh mỗi chị".
@@ -1040,11 +1133,18 @@ def _normalize_numbers(text: str) -> str:
 
 
 class VietnameseNormalizer:
-    """Strip reasoning leakage and markup, then verbalize numbers and units."""
+    """Strip reasoning leakage and markup, then verbalize numbers and units.
+
+    The dialect comes from the speaker (Task 7), so one instance is built per
+    speaker_id rather than one per config.
+    """
+
+    def __init__(self, dialect: Dialect = NORTHERN) -> None:
+        self._dialect = dialect
 
     def normalize(self, text: str) -> str:
         stripped = strip_markup(text)
-        return _normalize_numbers(stripped) if stripped else ""
+        return _normalize_numbers(stripped, self._dialect) if stripped else ""
 
 
 class EnglishNormalizer:
@@ -1065,9 +1165,9 @@ def _say_english(token: str) -> str:
     return num2words(int(token))
 
 
-def get_normalizer(config: str) -> Normalizer:
+def get_normalizer(config: str, dialect: Dialect | None = None) -> Normalizer:
     if config == "vietnamese":
-        return VietnameseNormalizer()
+        return VietnameseNormalizer(dialect or NORTHERN)
     if config == "english":
         return EnglishNormalizer()
     raise ValueError(f"no normalizer for config {config!r}")
@@ -1750,7 +1850,7 @@ git commit -m "feat: add ViSEC speaker pool loading and assignment policies"
 
 **Interfaces:**
 - Consumes: `Config`/`TextConfig` (Task 1), `read_manifest`/`MANIFEST_SCHEMA` (Task 2), `get_normalizer` (Task 3), `check`/`Rejection` (Task 4), `Speaker`/`get_assigner` (Task 6).
-- Produces: `PLAN_SCHEMA: pa.Schema`; `CONFIG_PREFIX: dict[str, str]`; `shard_id(config: str, index: int) -> str`; `shard_repo_path(config: str, index: int, total: int) -> str`; `audio_path(config, disease_slug, conv_id, turn, role) -> str`; `build_plan(manifest: pa.Table, cfg: Config, pool: list[Speaker], normalizers: dict[str, object] | None = None) -> tuple[pa.Table, list[dict]]`; `compute_plan_hash(plan: pa.Table, cfg: Config) -> str`; `shard_totals(plan: pa.Table) -> dict[str, int]`; `write_plan`/`read_plan`. Tasks 12, 13 and 14 consume these.
+- Produces: `PLAN_SCHEMA: pa.Schema`; `CONFIG_PREFIX: dict[str, str]`; `shard_id(config: str, index: int) -> str`; `shard_repo_path(config: str, index: int, total: int) -> str`; `audio_path(config, disease_slug, conv_id, turn, role) -> str`; `build_plan(manifest: pa.Table, cfg: Config, pool: list[Speaker], normalizers: dict[tuple[str, int], object] | None = None) -> tuple[pa.Table, list[dict]]` (normalizers keyed by `(config, speaker_id)`; speakers are assigned **before** normalization because the dialect follows the speaker); `compute_plan_hash(plan: pa.Table, cfg: Config) -> str`; `shard_totals(plan: pa.Table) -> dict[str, int]`; `write_plan`/`read_plan`. Tasks 12, 13 and 14 consume these.
 
 Plan columns: `config, disease_slug, disease_name, conv_id, turn, role, text_raw, text_spoken, speaker_id, speaker_emotions, speaker_unique_source_s, shard_id, audio_path`.
 
@@ -1808,7 +1908,9 @@ def _manifest(n_convs=5, n_turns=2, text="Xin chào bác sĩ."):
     return pa.Table.from_pydict(columns, schema=MANIFEST_SCHEMA)
 
 
-_NORMALIZERS = {"vietnamese": type("N", (), {"normalize": staticmethod(lambda t: t)})()}
+_IDENTITY = type("N", (), {"normalize": staticmethod(lambda t: t)})()
+# keyed by (config, speaker_id) - the dialect follows the speaker
+_NORMALIZERS = {("vietnamese", sid): _IDENTITY for sid in range(6)}
 
 
 def test_shard_id_is_prefixed_and_zero_padded():
@@ -1890,11 +1992,25 @@ def test_speaker_metadata_columns_are_populated():
 
 
 def test_text_spoken_comes_from_the_normalizer():
-    shouty = {"vietnamese": type("N", (), {"normalize": staticmethod(str.upper)})()}
+    upper = type("N", (), {"normalize": staticmethod(str.upper)})()
+    shouty = {("vietnamese", sid): upper for sid in range(6)}
     plan, _ = build_plan(_manifest(n_convs=1, n_turns=1), _cfg(), _pool(), shouty)
     row = plan.to_pylist()[0]
     assert row["text_raw"] == "Xin chào bác sĩ."
     assert row["text_spoken"] == "XIN CHÀO BÁC SĨ."
+
+
+def test_dialect_follows_the_speaker():
+    # Two speakers with different dialects must produce different text for the
+    # same input, and the same speaker must always produce the same text.
+    manifest = _manifest(n_convs=30, n_turns=1, text="Uống 1005 ml mỗi ngày.")
+    plan, _ = build_plan(manifest, _cfg(), _pool(), None)
+    rows = plan.to_pylist()
+    by_speaker = {}
+    for row in rows:
+        by_speaker.setdefault(row["speaker_id"], set()).add(row["text_spoken"])
+    assert all(len(v) == 1 for v in by_speaker.values())      # stable per speaker
+    assert len({next(iter(v)) for v in by_speaker.values()}) > 1  # differs across speakers
 
 
 def test_build_plan_is_deterministic():
@@ -1965,8 +2081,9 @@ import pyarrow.parquet as pq
 
 from meddies_tts.config import Config
 from meddies_tts.reject import check
-from meddies_tts.speakers import Speaker, get_assigner
+from meddies_tts.speakers import Speaker, derive_seed, get_assigner
 from meddies_tts.textprep import get_normalizer
+from meddies_tts.vietnamese_numbers import dialect_from_seed
 
 NORMALIZER_VERSION = "1"
 
@@ -2009,12 +2126,12 @@ def build_plan(
     manifest: pa.Table,
     cfg: Config,
     pool: list[Speaker],
-    normalizers: dict[str, object] | None = None,
+    normalizers: dict[tuple[str, int], object] | None = None,
 ) -> tuple[pa.Table, list[dict]]:
     """Normalize, reject, assign speakers and pack conversations into shards."""
     by_id = {speaker.speaker_id: speaker for speaker in pool}
     assigner = get_assigner(cfg.speaker, pool)
-    cache: dict[str, object] = dict(normalizers or {})
+    cache: dict[tuple[str, int], object] = dict(normalizers or {})
 
     kept: list[dict] = []
     rejects: list[dict] = []
@@ -2034,9 +2151,20 @@ def build_plan(
                 }
             )
             continue
-        if config not in cache:
-            cache[config] = get_normalizer(config)
-        spoken = cache[config].normalize(row["text_raw"])
+        # Speaker FIRST: the Vietnamese dialect (linh/nghìn vs lẻ/ngàn, tư vs bốn)
+        # is a property of the speaker, so normalization depends on this choice.
+        speaker_id = assigner.assign(
+            config, row["disease_slug"], row["conv_id"], row["turn"], row["role"]
+        )
+        speaker = by_id[speaker_id]
+
+        key = (config, speaker_id)
+        if key not in cache:
+            dialect = dialect_from_seed(
+                derive_seed(cfg.speaker.seed_salt, "dialect", speaker_id)
+            )
+            cache[key] = get_normalizer(config, dialect)
+        spoken = cache[key].normalize(row["text_raw"])
         if not spoken:
             rejects.append(
                 {
@@ -2047,10 +2175,6 @@ def build_plan(
                 }
             )
             continue
-        speaker_id = assigner.assign(
-            config, row["disease_slug"], row["conv_id"], row["turn"], row["role"]
-        )
-        speaker = by_id[speaker_id]
         kept.append(
             {
                 **row,
@@ -2127,7 +2251,7 @@ def read_plan(path: Path) -> pa.Table:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/tts/test_plan.py -v`
-Expected: 19 passed
+Expected: 20 passed
 
 - [ ] **Step 5: Commit**
 
