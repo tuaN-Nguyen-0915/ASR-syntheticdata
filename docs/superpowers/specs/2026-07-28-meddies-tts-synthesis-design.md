@@ -447,7 +447,7 @@ whole pipeline is unit-testable on the development Mac.
 
 ```python
 image = (modal.Image.debian_slim(python_version="3.11")
-         .pip_install("torch", "nano-vllm-voxcpm", "vinorm", "datasets",
+         .pip_install("torch", "nano-vllm-voxcpm", "datasets",
                       "soundfile", "soxr", "huggingface_hub[hf_transfer]")
          .pip_install("flash-attn", extra_options="--no-build-isolation")
          .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"}))
@@ -469,6 +469,9 @@ class Synthesizer:
     @modal.method()
     async def run_shard(self, shard_id: int) -> dict: ...
 ```
+
+There are two images: this GPU one, and a lightweight `cpu_image` (no torch, no
+flash-attn) carrying `vinorm` for Stage 1 (§3.3). Normalization never enters the GPU image.
 
 VoxCPM2 weights are fetched once via `snapshot_download` onto a Modal Volume and mounted
 read-only. Two known build hazards: `flash-attn` requires `--no-build-isolation`, and
