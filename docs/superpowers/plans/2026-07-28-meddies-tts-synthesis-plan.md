@@ -26,6 +26,24 @@
 - **Reject rule (exact):** reject if `len(text) > text.max_chars` OR (`len(words) > 200` AND `type_token_ratio < text.min_ttr` AND `max_5gram_repeat >= text.max_ngram_repeat`).
 - **Tests never call the real HF Hub, the real Modal API, or the real 711k-row dataset.** Use fakes, `tmp_path`, and small fixtures.
 - Follow the existing repo style: plain `pytest` functions (no classes), type-hinted module-level functions, private module constants prefixed `_`.
+- **Comment the code, concisely.** Every public function gets a one-line docstring saying what it does. Add a short inline comment wherever a block is non-obvious — a regex, an ordering constraint, a magic number, a workaround. Prefer one line; never restate what the code plainly says. Where a measurement drove the choice, cite the number. This overrides the existing `meddies/` package's near-comment-free style.
+
+```python
+# GOOD - says what, and why the reader could not have guessed it
+_IDENT = re.compile(r"\b[A-Za-zÀ-ỹ]+-?\d+[A-Za-z0-9]*\b")   # B12, T4, HbA1c, COVID-19
+
+def _slot(index: int) -> str:
+    """Digit-free sentinel -- a numeric placeholder would itself get verbalized."""
+
+# the right side MUST be a period word, or "anh/chị" (9,760 occurrences)
+# would become "anh mỗi chị"
+out = re.sub(rf"\b({_MEASURES})\s*/\s*({periods})\b", ...)
+
+# BAD - restates the code, or explains nothing
+i = i + 1              # increment i
+_UNITS = {...}         # the units dict
+def normalize(text):   # normalizes text
+```
 
 ---
 
