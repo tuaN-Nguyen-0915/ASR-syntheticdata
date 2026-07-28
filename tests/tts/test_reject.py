@@ -48,10 +48,21 @@ def test_length_rule_fires_at_the_boundary():
     assert check("x" * 3001, _CFG).reason == "too_long"
 
 
-def test_rejects_real_degenerate_fixture():
+def test_rejects_real_degenerate_fixture_by_degeneracy():
+    # Fixture is ~27K chars, so it would trip the length rule under default config.
+    # Test the degeneracy rule independently by raising max_chars.
+    text = _FIXTURE.read_text(encoding="utf-8")
+    cfg = TextConfig(max_chars=100_000)
+    result = check(text, cfg)
+    assert result is not None
+    assert result.reason == "degenerate"
+
+
+def test_rejects_real_degenerate_fixture_by_length():
+    # Same fixture also exceeds default max_chars limit.
     result = check(_FIXTURE.read_text(encoding="utf-8"), _CFG)
     assert result is not None
-    assert result.reason in {"too_long", "degenerate"}
+    assert result.reason == "too_long"
 
 
 def test_degeneration_rule_fires_independently_of_length():
