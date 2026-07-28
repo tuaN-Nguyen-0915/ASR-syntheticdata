@@ -1,0 +1,32 @@
+hf:
+  repo_id: "Meddies/SynthAudio"   # REQUIRED — no implicit default in code
+  private: false
+  revision: "main"
+  token_secret: "huggingface"     # Modal Secret holding HF_TOKEN (write scope)
+
+speaker:
+  policy: per_conversation        # or per_turn
+  pool: all                       # or a path to a file of allowed speaker_ids
+  seed_salt: "v1"                 # bump to reshuffle every voice
+
+engine:
+  concurrency: 48                 # MUST be <= max_num_seqs
+  max_num_seqs: 64
+  max_num_batched_tokens: 16384
+  cfg_value: 2.0
+  temperature: 1.0
+  inference_timesteps: 10
+
+text:
+  chunk_target_seconds: 12.0    # VoxCPM degrades past ~13 s per generation
+  chars_per_sec: 14.0           # calibrated by the pilot; budget = target x this
+  silence_ms: 250
+  max_chars: 3000
+  min_ttr: 0.35
+  max_ngram_repeat: 4
+
+run:
+  gpu: "A100-40GB"
+  convs_per_shard: 122
+  budget_usd: null
+  configs: ["vietnamese"]
