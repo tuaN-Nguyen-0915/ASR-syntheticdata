@@ -191,6 +191,37 @@ async def test_downstream_error_is_recorded_not_fatal_to_the_shard(monkeypatch):
     assert result.failures[0]["reason"] == "unexpected_error"
 
 
+async def test_cancelled_child_coroutine_is_recorded_not_a_crash(monkeypatch):
+    # CancelledError is a BaseException (Python 3.8+), not an Exception.
+    # asyncio.gather(..., return_exceptions=True) can hand one child's
+    # CancelledError back as another coroutine's outcome (e.g. that utterance's
+    # own retry loop got cancelled independently of the rest of the shard). If
+    # run_shard only checked isinstance(outcome, Exception), the tuple unpack
+    # below it would raise TypeError, escaping run_shard and discarding every
+    # OTHER utterance's already-completed audio along with it.
+    import asyncio
+
+    import meddies_tts.runner as runner_module
+
+    real_synthesize = runner_module._synthesize_utterance
+    cancelled_path = _row(1)["audio_path"]
+
+    async def flaky_synthesize(row, *args, **kwargs):
+        if row["audio_path"] == cancelled_path:
+            raise asyncio.CancelledError("child cancelled")
+        return await real_synthesize(row, *args, **kwargs)
+
+    monkeypatch.setattr(runner_module, "_synthesize_utterance", flaky_synthesize)
+
+    plan = [_row(0), _row(1), _row(2)]
+    rows, result = await run_shard("vi-00000", plan, FakeEngine(), _REFS, _cfg())
+
+    assert len(rows) == 2
+    assert result.n_failed == 1
+    assert result.failures[0]["audio_path"] == cancelled_path
+    assert result.failures[0]["reason"] == "unexpected_error"
+
+
 async def test_missing_audio_path_is_recorded_not_a_crash():
     # A row missing "audio_path" makes the failure-handler's own row["audio_path"]
     # lookup raise a second KeyError that used to escape uncaught. The handler must

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from meddies_tts.config import Config
@@ -13,10 +14,6 @@ from meddies_tts.reject import check
 from meddies_tts.speakers import Speaker, derive_seed, get_assigner
 from meddies_tts.textprep import get_normalizer
 from meddies_tts.vietnamese_numbers import dialect_from_seed
-
-# Bumping this invalidates every existing plan hash, forcing a full replan.
-# Bump it whenever normalization rules change in a way that alters output text.
-NORMALIZER_VERSION = "1"
 
 # Namespaces shard ids per config so planning one language never renumbers another.
 CONFIG_PREFIX = {"vietnamese": "vi", "english": "en"}
@@ -169,24 +166,52 @@ def shard_totals(plan: pa.Table) -> dict[str, int]:
     return {config: len(ids) for config, ids in totals.items()}
 
 
-def compute_plan_hash(plan: pa.Table, cfg: Config) -> str:
-    """Hash the identity of the work: conversations, speakers, packing, normalization.
+def compute_plan_hash(plan: pa.Table, cfg: Config, config: str) -> str:
+    """Hash one config's slice of the plan: everything that determines its audio.
 
-    Deliberately EXCLUDES hf.repo_id: retargeting where the dataset gets
-    published must not invalidate a plan or orphan already-finished shards.
-    It DOES include the speaker salt, policy, pool, configs and shard packing,
-    since changing any of those changes what actually gets synthesized.
+    Per-config, not per-plan-file: drift is checked per config (see
+    hub.check_plan_drift), so a single hash spanning every config in the plan
+    would trip PlanDriftError for an untouched Vietnamese config the moment an
+    unrelated config (e.g. English) is added to the run. Planning ["vietnamese"]
+    alone and ["vietnamese", "english"] together over the same conversations
+    must yield the identical vietnamese hash -- so nothing here may depend on
+    which OTHER configs are in the plan, only on this config's own rows and cfg.
+
+    Includes a digest of the full text_spoken column (hashed, not embedded raw,
+    to keep the payload cheap) plus every text.*/engine.* field the Task 17 pilot
+    sweeps and that changes what the audio sounds like: chunk_target_seconds,
+    chars_per_sec, silence_ms, cfg_value, temperature, inference_timesteps.
+    Hashing text_spoken directly makes a hand-maintained NORMALIZER_VERSION
+    constant redundant -- any normalizer change that alters output text already
+    changes text_spoken, and therefore this hash, with no extra bookkeeping. (A
+    prior version of this function relied on such a constant; it has been removed.)
+
+    Deliberately EXCLUDES hf.repo_id (retargeting where the dataset gets
+    published must not invalidate a plan or orphan already-finished shards) and
+    engine.concurrency/max_num_seqs (throughput knobs with no effect on the
+    generated audio).
     """
+    subset = plan.filter(pc.equal(plan.column("config"), config))
+    # Joined with a NUL separator (never appears in corpus text) so concatenation
+    # can't collide across a row boundary, e.g. ("ab","c") vs ("a","bc").
+    text_blob = "\x00".join(subset.column("text_spoken").to_pylist()).encode("utf-8")
+    text_spoken_digest = hashlib.blake2b(text_blob, digest_size=16).hexdigest()
     payload = {
-        "normalizer_version": NORMALIZER_VERSION,
+        "config": config,
+        "text_spoken_digest": text_spoken_digest,
         "speaker_policy": cfg.speaker.policy,
         "speaker_pool": cfg.speaker.pool,
         "seed_salt": cfg.speaker.seed_salt,
         "convs_per_shard": cfg.run.convs_per_shard,
-        "configs": list(cfg.run.configs),
+        "text_chunk_target_seconds": cfg.text.chunk_target_seconds,
+        "text_chars_per_sec": cfg.text.chars_per_sec,
+        "text_silence_ms": cfg.text.silence_ms,
+        "engine_cfg_value": cfg.engine.cfg_value,
+        "engine_temperature": cfg.engine.temperature,
+        "engine_inference_timesteps": cfg.engine.inference_timesteps,
         "rows": [
             [row["audio_path"], row["speaker_id"], row["shard_id"]]
-            for row in plan.select(["audio_path", "speaker_id", "shard_id"]).to_pylist()
+            for row in subset.select(["audio_path", "speaker_id", "shard_id"]).to_pylist()
         ],
     }
     # sort_keys makes the JSON serialization (and thus the hash) independent of

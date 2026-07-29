@@ -178,7 +178,13 @@ async def run_shard(
     rows: list[dict] = []
     failures: list[dict] = []
     for row, outcome in zip(plan_rows, outcomes):
-        if isinstance(outcome, Exception):
+        # BaseException, not Exception: asyncio.CancelledError is a BaseException in
+        # Python 3.8+, and gather(return_exceptions=True) can hand one back as a
+        # sibling coroutine's outcome (e.g. one utterance's chunk retry loop got
+        # cancelled). isinstance(outcome, Exception) would miss it, the tuple unpack
+        # below would raise TypeError, and that escapes run_shard entirely --
+        # discarding every OTHER utterance's already-completed audio along with it.
+        if isinstance(outcome, BaseException):
             failures.append(_failure(row, "unexpected_error", f"{type(outcome).__name__}: {outcome}"))
             continue
         built, failure = outcome

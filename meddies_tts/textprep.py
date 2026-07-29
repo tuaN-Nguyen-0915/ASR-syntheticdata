@@ -21,11 +21,62 @@ _WHITESPACE = re.compile(r"\s+")
 # pair, so other reasoning tags (and unclosed <think>) survive into output_full.
 # Measured: 2.77% of Vietnamese utterances carry one, and in 100% of those a real
 # utterance is underneath -- so strip, never reject.
-_RNAME = r"think|thinking|internal[_ ]?reasoning|phase[_ ]?check|reasoning|tool_call"
-_RTAG = rf"<\s*/?\s*(?:{_RNAME})\s*[>\"\]]?"
-_REASON_BLOCK = re.compile(rf"{_RTAG}.*?<\s*/\s*(?:{_RNAME})\s*[>\"\]]?", re.DOTALL | re.I)
+#
+# Longest/most-specific alternatives first (re alternation is first-match, not
+# longest-match): "internal[_ ]?reasoning" must precede "internal[_ ]?reason" or
+# the shorter one wins on "<internal_reasoning>", stranding "ing>" -- the same
+# class of trap documented for _UNIT_ALT/_ROMAN_ALT above.
+_RNAME = (
+    r"thinking|think|internal[_ ]?reasoning|internal[_ ]?reason|"
+    r"external[_ ]?reasoning|phase[_ ]?check|reasoning|tool_call"
+)
+# Corpus tags come in mismatched bracket styles -- "(internal_reasoning) ...
+# </internal_reasoning>" is a real example -- so both the opening delimiter
+# ("<" or "(") and the closing delimiter (">", '"', "]", or ")") are accepted
+# independently, not paired.
+_OPEN = r"[<(]"
+_CLOSE = r"[>\"\)\]]"
+_RTAG = rf"{_OPEN}\s*/?\s*(?:{_RNAME})\s*{_CLOSE}?"
+_REASON_BLOCK = re.compile(rf"{_RTAG}.*?{_OPEN}\s*/\s*(?:{_RNAME})\s*{_CLOSE}?", re.DOTALL | re.I)
 _REASON_TAG = re.compile(_RTAG, re.I)
-_TAG_FRAGMENT = re.compile(r"^[A-Za-z_]{0,12}[>\"\]]\s*")
+# Sweeps up a leftover fragment when an alternation above matched a SHORTER name
+# than what's actually in the text (see the ordering note), e.g. a bare
+# "internal_reasoning>" with no leading "<" at all -- the raw corpus contains
+# exactly that shape. "internal_reasoning" is 18 chars; {0,12} was 6 short and
+# left it untouched. 24 covers every _RNAME alternative with room to spare.
+_TAG_FRAGMENT = re.compile(rf"^[A-Za-z_]{{0,24}}{_CLOSE}\s*")
+
+# --- tagless leading reasoning-header blocks ---------------------------------
+# The largest untagged leak shape: no "<", "(", or any bracket at all -- just a
+# markdown-bold "**Internal Reasoning:**" header directly at the start of the
+# text, e.g. "**Internal Reasoning:** - **Phase:** Phase 4 (Closing). -
+# **Status:** ... - **Action:** ...". strip_markup's _BOLD rule would otherwise
+# turn this into ordinary-looking prose instead of removing it.
+#
+# Removed ONLY when a safe right boundary exists in the rest of the text:
+# either a real (if mismatched-bracket) closing tag, or an unambiguous
+# "**Response:**"/"**Trả lời:**" marker that starts the real reply. If neither
+# boundary is found, nothing is removed -- truncating a legitimate medical
+# utterance is worse than leaving one leaked header in.
+_HEADER_START = re.compile(r"^\s*\**\s*(?:internal|external)[_ ]?reasoning\s*:?\s*\**\s*", re.I)
+_HEADER_CLOSE_TAG = re.compile(rf"{_OPEN}\s*/\s*(?:internal|external)[_ ]?reasoning\s*{_CLOSE}?", re.I)
+_HEADER_RESPONSE_MARK = re.compile(r"\**\s*(?:response|trả\s+lời|reply)\s*:?\s*\**\s*", re.I)
+
+
+def _strip_tagless_reasoning_header(text: str) -> str:
+    """Remove a leading, tag-free reasoning header, if its right boundary is unambiguous."""
+    start = _HEADER_START.match(text)
+    if not start:
+        return text
+    rest = text[start.end():]
+    close = _HEADER_CLOSE_TAG.search(rest)
+    if close:
+        return rest[close.end():]
+    response = _HEADER_RESPONSE_MARK.search(rest)
+    if response:
+        return rest[response.end():]
+    return text  # no safe boundary found -- leave untouched, per the module note above
+
 
 # --- markdown ---------------------------------------------------------------
 _BOLD = re.compile(r"\*{1,3}")
@@ -91,7 +142,8 @@ def _strip_reasoning_tags(text: str) -> str:
     # Shared by strip_reasoning and strip_markup, without collapsing whitespace
     # yet -- strip_markup's bullet/ordered/heading regexes are newline-anchored
     # and need the original line breaks to still be there when they run.
-    out = _REASON_BLOCK.sub(" ", text)
+    out = _strip_tagless_reasoning_header(text)
+    out = _REASON_BLOCK.sub(" ", out)
     out = _REASON_TAG.sub(" ", out)
     return _TAG_FRAGMENT.sub("", out.lstrip())
 

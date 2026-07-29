@@ -81,8 +81,12 @@ def test_plan_packs_conversations_into_shards(workspace):
 
 
 def test_plan_writes_a_hash_file(workspace):
+    # One hash per config (Fix I2), stored as a {config: hash} JSON mapping, not
+    # a single hash for the whole plan file.
     plan_out = _make_plan(workspace)
-    assert plan_out.with_suffix(".hash").read_text(encoding="utf-8").strip()
+    hashes = json.loads(plan_out.with_suffix(".hash").read_text(encoding="utf-8"))
+    assert hashes.keys() == {"vietnamese"}
+    assert hashes["vietnamese"]
 
 
 def test_plan_normalizes_numbers_into_text_spoken(workspace):
@@ -100,6 +104,28 @@ def test_estimate_reports_cost_and_storage(workspace, capsys):
     assert _run(workspace, "estimate", "--plan", str(plan_out)) == 0
     out = capsys.readouterr().out
     assert "GPU-hours" in out and "USD" in out and "GB" in out
+
+
+def test_estimate_falls_back_to_the_configs_calibrated_chars_per_sec(workspace, capsys):
+    # Fix 1: without --chars-per-sec, `estimate` must use the pilot-calibrated
+    # config.yaml value, not the pre-pilot argparse default of 14.0.
+    (workspace / "config.yaml").write_text(
+        _CONFIG + "text:\n  chars_per_sec: 7.0\n", encoding="utf-8"
+    )
+    plan_out = _make_plan(workspace)
+    assert _run(workspace, "estimate", "--plan", str(plan_out)) == 0
+    out = capsys.readouterr().out
+    assert "at 7.0 chars/sec" in out
+
+
+def test_estimate_flag_overrides_the_configs_chars_per_sec(workspace, capsys):
+    (workspace / "config.yaml").write_text(
+        _CONFIG + "text:\n  chars_per_sec: 7.0\n", encoding="utf-8"
+    )
+    plan_out = _make_plan(workspace)
+    assert _run(workspace, "estimate", "--plan", str(plan_out), "--chars-per-sec", "20.0") == 0
+    out = capsys.readouterr().out
+    assert "at 20.0 chars/sec" in out
 
 
 def test_missing_repo_id_exits_nonzero(workspace, capsys):

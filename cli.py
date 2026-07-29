@@ -27,7 +27,6 @@ from meddies_tts.plan import (
     shard_totals,
     write_plan,
 )
-from meddies_tts.qc import DEFAULT_CHARS_PER_SEC
 from meddies_tts.speakers import load_pool
 
 # Modal A100-40GB, USD/sec, verified against modal.com/pricing
@@ -68,7 +67,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("estimate", help="project GPU-hours, cost and storage")
     p.add_argument("--plan", required=True)
-    p.add_argument("--chars-per-sec", type=float, default=DEFAULT_CHARS_PER_SEC)
+    # default=None (not DEFAULT_CHARS_PER_SEC): the Task 17 pilot calibrates this
+    # value into config.yaml's text.chars_per_sec, and that calibrated figure must
+    # win whenever the flag is not explicitly given -- see _cmd_estimate's fallback.
+    p.add_argument("--chars-per-sec", type=float, default=None)
 
     p = sub.add_parser("status", help="report done/remaining shards against the Hub")
     p.add_argument("--plan", required=True)
@@ -101,11 +103,19 @@ def _cmd_plan(args, cfg) -> int:
         for record in rejects:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    plan_hash = compute_plan_hash(plan, cfg)
-    Path(args.out).with_suffix(".hash").write_text(plan_hash, encoding="utf-8")
+    # One hash per config (Fix I2), not one hash for the whole plan file: drift
+    # detection is per-config (see hub.check_plan_drift), so a single global hash
+    # would trip PlanDriftError on an unchanged config the moment another config
+    # is added to the run. Stored as a {config: hash} JSON mapping so every
+    # dispatch-side reader (cli.py status, app.py) can look up just its config.
+    hashes = {config: compute_plan_hash(plan, cfg, config) for config in cfg.run.configs}
+    Path(args.out).with_suffix(".hash").write_text(
+        json.dumps(hashes, sort_keys=True), encoding="utf-8"
+    )
+    hash_summary = ", ".join(f"{config}={h}" for config, h in sorted(hashes.items()))
     print(
         f"plan: {plan.num_rows:,} utterances, {sum(shard_totals(plan).values())} shards, "
-        f"{len(rejects):,} rejected -> {args.out} (hash {plan_hash})"
+        f"{len(rejects):,} rejected -> {args.out} (hashes: {hash_summary})"
     )
     return 0
 
@@ -122,12 +132,17 @@ def _cmd_preflight(args, cfg) -> int:
 def _cmd_estimate(args, cfg) -> int:
     """Project GPU-hours, USD cost and storage for a plan, offline."""
     plan = read_plan(Path(args.plan))
+    # Fall back to the config's calibrated rate (set by the Task 17 pilot), not the
+    # argparse default, when --chars-per-sec is not explicitly given -- otherwise an
+    # estimate silently ignores whatever config.yaml says and always reports the
+    # pre-pilot guess of DEFAULT_CHARS_PER_SEC.
+    chars_per_sec = args.chars_per_sec if args.chars_per_sec is not None else cfg.text.chars_per_sec
     chars = sum(len(text) for text in plan.column("text_spoken").to_pylist())
-    audio_sec = chars / args.chars_per_sec
+    audio_sec = chars / chars_per_sec
     gpu_sec = audio_sec / _AGGREGATE_SPEEDUP
     print(f"utterances : {plan.num_rows:,}")
     print(f"shards     : {sum(shard_totals(plan).values()):,}")
-    print(f"audio      : {audio_sec / 3600:,.1f} h  (at {args.chars_per_sec} chars/sec)")
+    print(f"audio      : {audio_sec / 3600:,.1f} h  (at {chars_per_sec} chars/sec)")
     print(f"GPU-hours  : {gpu_sec / 3600:,.1f}")
     print(f"cost       : {gpu_sec * _A100_USD_PER_SEC:,.2f} USD  (A100-40GB)")
     print(f"storage    : {audio_sec * _FLAC_BYTES_PER_SEC / 1e9:,.1f} GB  (16 kHz FLAC)")
@@ -139,14 +154,17 @@ def _cmd_status(args, cfg) -> int:
     from huggingface_hub import HfApi  # imported lazily so `estimate` stays offline-safe
 
     plan = read_plan(Path(args.plan))
-    local_hash = Path(args.plan).with_suffix(".hash").read_text(encoding="utf-8").strip()
+    local_hashes = json.loads(
+        Path(args.plan).with_suffix(".hash").read_text(encoding="utf-8")
+    )
     api = HfApi()
     for config in cfg.run.configs:
-        check_plan_drift(api, cfg.hf.repo_id, config, local_hash)
+        check_plan_drift(api, cfg.hf.repo_id, config, local_hashes[config])
     existing = list_repo_paths(api, cfg.hf.repo_id)
     total = len(shard_targets(plan))
     remaining = remaining_targets(plan, existing)
-    print(f"plan hash : {local_hash}")
+    hash_summary = ", ".join(f"{config}={h}" for config, h in sorted(local_hashes.items()))
+    print(f"plan hash : {hash_summary}")
     print(f"shards    : {total}")
     print(f"done      : {total - len(remaining)}")
     print(f"remaining : {len(remaining)}")

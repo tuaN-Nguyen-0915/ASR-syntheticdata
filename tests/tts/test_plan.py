@@ -162,7 +162,7 @@ def test_build_plan_is_deterministic():
 def test_plan_hash_is_stable_for_identical_inputs():
     cfg = _cfg()
     plan, _ = build_plan(_manifest(n_convs=4), cfg, _pool(), _NORMALIZERS)
-    assert compute_plan_hash(plan, cfg) == compute_plan_hash(plan, cfg)
+    assert compute_plan_hash(plan, cfg, "vietnamese") == compute_plan_hash(plan, cfg, "vietnamese")
 
 
 def test_plan_hash_changes_when_salt_changes():
@@ -174,7 +174,7 @@ def test_plan_hash_changes_when_salt_changes():
     cfg_b = replace(cfg_a, speaker=SpeakerConfig(seed_salt="v2"))
     plan_a, _ = build_plan(_manifest(n_convs=4), cfg_a, _pool(), _NORMALIZERS)
     plan_b, _ = build_plan(_manifest(n_convs=4), cfg_b, _pool(), _NORMALIZERS)
-    assert compute_plan_hash(plan_a, cfg_a) != compute_plan_hash(plan_b, cfg_b)
+    assert compute_plan_hash(plan_a, cfg_a, "vietnamese") != compute_plan_hash(plan_b, cfg_b, "vietnamese")
 
 
 def test_plan_hash_is_unaffected_by_repo_id():
@@ -183,7 +183,7 @@ def test_plan_hash_is_unaffected_by_repo_id():
     cfg_a = _cfg()
     cfg_b = replace(cfg_a, hf=HFConfig(repo_id="someone/scratch"))
     plan, _ = build_plan(_manifest(n_convs=4), cfg_a, _pool(), _NORMALIZERS)
-    assert compute_plan_hash(plan, cfg_a) == compute_plan_hash(plan, cfg_b)
+    assert compute_plan_hash(plan, cfg_a, "vietnamese") == compute_plan_hash(plan, cfg_b, "vietnamese")
 
 
 def test_plan_hash_changes_when_shard_packing_changes():
@@ -191,7 +191,95 @@ def test_plan_hash_changes_when_shard_packing_changes():
     cfg_b = _cfg(convs_per_shard=5)
     plan_a, _ = build_plan(_manifest(n_convs=10), cfg_a, _pool(), _NORMALIZERS)
     plan_b, _ = build_plan(_manifest(n_convs=10), cfg_b, _pool(), _NORMALIZERS)
-    assert compute_plan_hash(plan_a, cfg_a) != compute_plan_hash(plan_b, cfg_b)
+    assert compute_plan_hash(plan_a, cfg_a, "vietnamese") != compute_plan_hash(plan_b, cfg_b, "vietnamese")
+
+
+def test_plan_hash_changes_when_text_spoken_changes():
+    # A digest of text_spoken must be in the payload -- normalization output
+    # changing (e.g. a textprep.py rule edit) must change the hash even though
+    # nothing else about the plan (rows, salt, packing) is different.
+    cfg = _cfg()
+    upper = type("N", (), {"normalize": staticmethod(str.upper)})()
+    lower = type("N", (), {"normalize": staticmethod(str.lower)})()
+    plan_a, _ = build_plan(
+        _manifest(n_convs=4), cfg, _pool(), {("vietnamese", sid): upper for sid in range(6)}
+    )
+    plan_b, _ = build_plan(
+        _manifest(n_convs=4), cfg, _pool(), {("vietnamese", sid): lower for sid in range(6)}
+    )
+    assert compute_plan_hash(plan_a, cfg, "vietnamese") != compute_plan_hash(plan_b, cfg, "vietnamese")
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("chunk_target_seconds", 20.0),
+        ("chars_per_sec", 7.0),
+        ("silence_ms", 500),
+    ],
+)
+def test_plan_hash_changes_when_a_pilot_calibrated_text_field_changes(field, value):
+    # These are exactly the fields the Task 17 pilot sweeps -- if the hash doesn't
+    # cover them, a re-calibrated dataset is indistinguishable from the old one.
+    from dataclasses import replace
+
+    cfg_a = _cfg()
+    cfg_b = replace(cfg_a, text=replace(cfg_a.text, **{field: value}))
+    plan, _ = build_plan(_manifest(n_convs=4), cfg_a, _pool(), _NORMALIZERS)
+    assert compute_plan_hash(plan, cfg_a, "vietnamese") != compute_plan_hash(plan, cfg_b, "vietnamese")
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("cfg_value", 4.0),
+        ("temperature", 0.5),
+        ("inference_timesteps", 20),
+    ],
+)
+def test_plan_hash_changes_when_an_engine_output_field_changes(field, value):
+    from dataclasses import replace
+
+    cfg_a = _cfg()
+    cfg_b = replace(cfg_a, engine=replace(cfg_a.engine, **{field: value}))
+    plan, _ = build_plan(_manifest(n_convs=4), cfg_a, _pool(), _NORMALIZERS)
+    assert compute_plan_hash(plan, cfg_a, "vietnamese") != compute_plan_hash(plan, cfg_b, "vietnamese")
+
+
+def test_plan_hash_is_unaffected_by_throughput_only_engine_fields():
+    # concurrency/max_num_seqs change how FAST a shard is produced, not what the
+    # audio sounds like -- they must not invalidate an otherwise-identical plan.
+    from dataclasses import replace
+
+    cfg_a = _cfg()
+    cfg_b = replace(cfg_a, engine=replace(cfg_a.engine, concurrency=4, max_num_seqs=4))
+    plan, _ = build_plan(_manifest(n_convs=4), cfg_a, _pool(), _NORMALIZERS)
+    assert compute_plan_hash(plan, cfg_a, "vietnamese") == compute_plan_hash(plan, cfg_b, "vietnamese")
+
+
+def test_plan_hash_for_one_config_is_unaffected_by_other_configs_in_the_plan():
+    # Fix I2: drift is checked per config, so the vietnamese hash must be identical
+    # whether the plan was built with configs=("vietnamese",) alone or together
+    # with ("vietnamese", "english") over the SAME conversations -- otherwise
+    # adding english later would trip PlanDriftError on unchanged vietnamese.
+    manifest_vi = _manifest(n_convs=4)
+    # Build an English-language manifest for the SAME conversations by relabeling config.
+    en_columns = {n: manifest_vi.column(n).to_pylist() for n in manifest_vi.schema.names}
+    en_columns["config"] = ["english"] * manifest_vi.num_rows
+    manifest_en = pa.Table.from_pydict(en_columns, schema=manifest_vi.schema)
+    combined = pa.concat_tables([manifest_vi, manifest_en])
+
+    normalizers = dict(_NORMALIZERS)
+    normalizers.update({("english", sid): _IDENTITY for sid in range(6)})
+
+    cfg_vi_only = _cfg(configs=("vietnamese",))
+    cfg_both = _cfg(configs=("vietnamese", "english"))
+    plan_vi_only, _ = build_plan(manifest_vi, cfg_vi_only, _pool(), normalizers)
+    plan_both, _ = build_plan(combined, cfg_both, _pool(), normalizers)
+
+    assert compute_plan_hash(plan_vi_only, cfg_vi_only, "vietnamese") == compute_plan_hash(
+        plan_both, cfg_both, "vietnamese"
+    )
 
 
 def test_write_then_read_round_trips(tmp_path):

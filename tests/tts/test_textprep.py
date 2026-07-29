@@ -130,6 +130,106 @@ def test_text_without_tags_is_untouched_by_reasoning_stripping():
     assert _VN.normalize("Câu bình thường.") == "Câu bình thường."
 
 
+# --- Fix 2: leaked reasoning survives normalization ---------------------------
+# Real corpus: 0.62%-1.04% of Vietnamese utterances still leaked after the
+# pre-fix normalizer, across three distinct shapes (a/b/c below). Fixtures here
+# are drawn verbatim (or near-verbatim, trimmed for length) from output_full/.
+
+def test_fix2a_bare_tag_fragment_wider_than_12_chars_is_stripped():
+    # Real shape: a bare "internal_reasoning>" fragment with NO leading "<" at
+    # all. "internal_reasoning" is 18 chars; _TAG_FRAGMENT's old {0,12} cap was
+    # 6 short and silently left the whole fragment (and everything before the
+    # real utterance) untouched.
+    assert _VN.normalize(
+        "internal_reasoning> Xin chào bác sĩ ạ."
+    ) == "Xin chào bác sĩ ạ."
+
+
+def test_fix2a_typo_in_the_closing_tag_name_still_gets_swept():
+    # Real corpus fixture (output_full/vietnamese/amh_thap/conv_0023/Turn2/assistant.txt),
+    # trimmed: the closing tag is typo'd as "</internal_reasony>" (missing "ing",
+    # extra "y"). The alternation still matches the "internal_reason" prefix,
+    # stranding "y>" -- which the widened _TAG_FRAGMENT then sweeps up.
+    leaked = (
+        "<think> **Giai đoạn**: Thu thập thông tin (Phase 2). Tôi sẽ hỏi về cảm xúc. "
+        "</internal_reasony> Chị Hằng chào em, nghe chia sẻ của em tôi hiểu em đang lo lắng."
+    )
+    assert _VN.normalize(leaked) == (
+        "Chị Hằng chào em, nghe chia sẻ của em tôi hiểu em đang lo lắng."
+    )
+
+
+def test_fix2b_parenthesized_tag_with_mismatched_closing_bracket_is_stripped():
+    # Real corpus fixture (output_full/vietnamese/nhiem_trung_tim/conv_0007/Turn6/user.txt),
+    # trimmed: opens with "(internal_reasoning)" and closes with
+    # "</internal_reasoning>" -- mismatched bracket styles on the same tag.
+    leaked = (
+        "(internal_reasoning) **Giai đoạn**: Kết thúc phiên (Phase 4 - Closing). "
+        "**Phản hồi**: - Cảm ơn bệnh nhân. - Chúc sức khỏe. "
+        "</internal_reasoning> Rất vui vì tôi có thể giúp được anh."
+    )
+    assert _VN.normalize(leaked) == "Rất vui vì tôi có thể giúp được anh."
+
+
+def test_fix2b_external_reasoning_variant_is_stripped():
+    # _RNAME previously had no "external_reasoning" alternative at all.
+    assert _VN.normalize(
+        "<external_reasoning>Đang phân tích triệu chứng.</external_reasoning>Chào chị."
+    ) == "Chào chị."
+
+
+def test_fix2b_internal_reason_variant_is_stripped():
+    # _RNAME previously only knew "internal_reasoning", not the shorter "internal_reason".
+    assert _VN.normalize(
+        "<internal_reason>ghi chú nội bộ</internal_reason>Xin chào bác sĩ."
+    ) == "Xin chào bác sĩ."
+
+
+def test_fix2c_tagless_markdown_header_with_closing_tag_is_stripped():
+    # Real corpus fixture (output_full/vietnamese/viem_bao_hoat_dich_ngon_chan_cai/
+    # conv_0046/Turn8/assistant.txt), trimmed: starts with a bare
+    # "**Internal Reasoning:**" markdown header -- no "<"/"(" at all -- but DOES
+    # have a genuine (if mismatched-bracket) closing tag later in the text.
+    leaked = (
+        "**Internal Reasoning:** **Giai đoạn**: Providing Structure (Phase 3). "
+        "**Cần làm**: 1. Cung cấp thông tin. 2. Trả lời lo ngại. "
+        "</internal_reasoning> Tôi hiểu em quan tâm đến niềng răng trong suốt."
+    )
+    assert _VN.normalize(leaked) == "Tôi hiểu em quan tâm đến niềng răng trong suốt."
+
+
+def test_fix2c_tagless_markdown_header_bounded_by_response_marker_is_stripped():
+    # Real corpus fixture (output_full/vietnamese/viem_bao_hoat_dich_ngon_chan_cai/
+    # conv_0046/Turn8/assistant.txt -- another turn), trimmed: no closing tag
+    # anywhere, but a "**Response:**"-style marker unambiguously starts the
+    # real reply.
+    leaked = (
+        "**Internal Reasoning:** - **Phase:** Transitioning to Phase 3. "
+        "- **Status:** I have gathered sufficient information. "
+        "- **Safety Netting:** Warn about red flags. "
+        "**Response:** Cảm ơn anh/chị đã chia sẻ."
+    )
+    assert _VN.normalize(leaked) == "Cảm ơn anh chị đã chia sẻ."
+
+
+def test_fix2c_tagless_header_without_a_safe_boundary_is_left_alone():
+    # Conservative fallback: no closing tag AND no Response/Trả lời marker means
+    # there is no safe place to cut, so nothing is removed. Per the module's own
+    # rule, truncating a legitimate utterance is worse than leaving a leaked
+    # header in -- this is the acknowledged residual leak shape.
+    text = "**Internal Reasoning:** đang suy nghĩ về triệu chứng của bệnh nhân."
+    assert "đang suy nghĩ" in _VN.normalize(text)
+
+
+def test_fix2_legitimate_medical_text_with_bold_and_parentheses_is_untouched():
+    # Negative test: real medical content using markdown bold and parentheses
+    # (neither a tag nor a reasoning-header keyword) must not be touched by any
+    # of the Fix 2 rules.
+    assert _VN.normalize(
+        "**Lưu ý:** Cần đến bệnh viện để bác sĩ khám (đặc biệt nếu sốt cao)."
+    ) == "Lưu ý: Cần đến bệnh viện để bác sĩ khám (đặc biệt nếu sốt cao)."
+
+
 # --- units and identifiers ---------------------------------------------------
 
 def test_expanded_units_are_verbalized():

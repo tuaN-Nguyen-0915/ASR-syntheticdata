@@ -3,9 +3,17 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
 import modal
+
+# Circuit breaker (Fix C4): if this many shards are dispatched FIRST and every one
+# comes back non-"ok", the run is almost certainly systematically broken (e.g. a
+# mis-set calibration value), not unlucky -- abort rather than keep burning GPU
+# budget on the remaining shards. 5 is small enough to fail fast, large enough
+# not to trip on a couple of genuinely bad shards in an otherwise healthy run.
+_CIRCUIT_BREAKER_SHARDS = 5
 
 APP_NAME = "meddies-tts"
 MODEL_REPO = "openbmb/VoxCPM2"
@@ -88,7 +96,9 @@ class Synthesizer:
 
         self.cfg = load_config(Path(f"{PLAN_DIR}/config.yaml"))
         self.plan = read_plan(Path(f"{PLAN_DIR}/shard_plan.parquet"))
-        self.plan_hash = Path(f"{PLAN_DIR}/shard_plan.hash").read_text().strip()
+        # {config: hash} — one hash per config (Fix I2), not one for the whole plan
+        # file, so an unrelated config's shards can never trip drift detection here.
+        self.plan_hashes = json.loads(Path(f"{PLAN_DIR}/shard_plan.hash").read_text())
         self.api = HfApi()
 
         # Load the engine ONCE per container — this is what makes the shard-as-work-unit
@@ -117,34 +127,66 @@ class Synthesizer:
         """
         import time
 
+        import pyarrow.compute as pc
+
         from meddies_tts.hub import upload_path
         from meddies_tts.runner import run_shard as run
         from meddies_tts.writer import write_shard
 
         try:
+            config = repo_path.split("/")[1]  # "data/<config>/train-...parquet"
+            local_hash = self.plan_hashes.get(config)
             # Guards against a stale Modal Volume: the plan this container loaded at
-            # boot (self.plan_hash) must match the plan main() dispatched against, or
-            # rows would be written under a shard/path partition that no longer
-            # matches what's actually on the volume, with no error anywhere else.
-            if expected_plan_hash != self.plan_hash:
+            # boot (local_hash, for THIS shard's config) must match the hash main()
+            # dispatched against, or rows would be written under a shard/path
+            # partition that no longer matches what's actually on the volume, with
+            # no error anywhere else.
+            if expected_plan_hash != local_hash:
                 return {
                     "shard_id": shard_id,
                     "status": "error",
                     "error": (
-                        f"plan hash mismatch: dispatcher={expected_plan_hash} "
-                        f"volume={self.plan_hash}"
+                        f"plan hash mismatch for config {config!r}: "
+                        f"dispatcher={expected_plan_hash} volume={local_hash}"
                     ),
                 }
 
             started = time.time()
-            rows = [r for r in self.plan.to_pylist() if r["shard_id"] == shard_id]
-            built, result = await run(shard_id, rows, self.engine, self.refs, self.cfg)
+            # Filter the Arrow table BEFORE materializing to Python dicts: to_pylist()
+            # on the full ~711k-row plan costs ~4.3s and +1.7GB RSS per call, x473 shard
+            # dispatches, if done first. pc.equal + .filter narrows to this shard's
+            # ~1,500 rows in Arrow (~0.02s) before the (much cheaper) per-row conversion.
+            mask = pc.equal(self.plan.column("shard_id"), shard_id)
+            rows = self.plan.filter(mask).to_pylist()
+            # cfg.text.chars_per_sec is what the Task 17 pilot calibrates -- without
+            # threading it through here, QC silently falls back to runner's hardcoded
+            # DEFAULT_CHARS_PER_SEC (14.0) for every verdict, regardless of config.yaml.
+            built, result = await run(
+                shard_id, rows, self.engine, self.refs, self.cfg,
+                chars_per_sec=self.cfg.text.chars_per_sec,
+            )
             if not built:
                 return {"shard_id": shard_id, "status": "empty", "failed": result.n_failed}
 
             local = Path(f"/tmp/{shard_id}.parquet")
             try:
-                write_shard(built, local, self.plan_hash, json.dumps({"gpu": _GPU}))
+                # Everything that determines what this shard's audio actually
+                # sounds/reads like, plus what hardware made it and the plan hash
+                # that pins the work identity -- without seed_salt here the
+                # published "seed" column is unreproducible from the shard alone.
+                provenance = json.dumps({
+                    "gpu": _GPU,
+                    "seed_salt": self.cfg.speaker.seed_salt,
+                    "speaker_policy": self.cfg.speaker.policy,
+                    "text_chunk_target_seconds": self.cfg.text.chunk_target_seconds,
+                    "text_chars_per_sec": self.cfg.text.chars_per_sec,
+                    "text_silence_ms": self.cfg.text.silence_ms,
+                    "engine_cfg_value": self.cfg.engine.cfg_value,
+                    "engine_temperature": self.cfg.engine.temperature,
+                    "engine_inference_timesteps": self.cfg.engine.inference_timesteps,
+                    "plan_hash": local_hash,
+                })
+                write_shard(built, local, local_hash, provenance)
                 # Atomic by construction: nothing is uploaded until the whole shard is written.
                 upload_path(self.api, self.cfg.hf.repo_id, local, repo_path)
             finally:
@@ -192,12 +234,14 @@ def main(shards: str = "remaining", config_path: str = "config.yaml",
 
     cfg = load_config(Path(config_path))
     plan = read_plan(Path(plan_path))
-    plan_hash = Path(plan_path).with_suffix(".hash").read_text(encoding="utf-8").strip()
+    # {config: hash} — see plan.compute_plan_hash's docstring for why this is
+    # per-config rather than one hash for the whole plan file.
+    hashes = json.loads(Path(plan_path).with_suffix(".hash").read_text(encoding="utf-8"))
 
     api = HfApi()
     preflight(api, cfg.hf.repo_id, cfg.hf.private)          # fails in seconds, not dollars
     for config in cfg.run.configs:
-        check_plan_drift(api, cfg.hf.repo_id, config, plan_hash)
+        check_plan_drift(api, cfg.hf.repo_id, config, hashes[config])
 
     # One listing call for the whole repo, diffed locally against every shard the plan
     # expects -- this is what lets "remaining" resume cheaply instead of a per-shard probe.
@@ -215,33 +259,72 @@ def main(shards: str = "remaining", config_path: str = "config.yaml",
 
     print(f"dispatching {len(targets)} shard(s) to {_GPU}")
     synth = Synthesizer()
-    # Each call also carries the dispatcher's plan_hash, so the container can refuse
-    # (see Synthesizer.run_shard) rather than silently synthesize against a plan that
-    # disagrees with what's on the Modal Volume.
-    calls = [(shard_id, repo_path, plan_hash) for shard_id, repo_path in targets]
+    # Each call also carries the dispatcher's hash for THAT shard's config, so the
+    # container can refuse (see Synthesizer.run_shard) rather than silently
+    # synthesize against a plan that disagrees with what's on the Modal Volume.
+    calls = [(shard_id, repo_path, hashes[repo_path.split("/")[1]]) for shard_id, repo_path in targets]
     total_audio = 0.0
     # The plan hash is published to the Hub only after a config's FIRST shard actually
     # lands "ok" -- not up front. Publishing before any shard exists would leave
     # provenance for zero data if the run died on shard one, and a later legitimate
     # re-plan would then trip PlanDriftError against a hash that never produced anything.
     hash_published: set[str] = set()
-    outcomes = synth.run_shard.starmap(calls, return_exceptions=True)
-    for (shard_id, repo_path, _), outcome in zip(calls, outcomes):
-        if isinstance(outcome, Exception):
-            # Modal itself failed to deliver a result (e.g. a container crash), rather
-            # than the application-level failure Synthesizer.run_shard already converts
-            # to a "status": "error" dict. Either way, one shard's failure must not stop
-            # the rest of the dispatch loop.
-            outcome = {
-                "shard_id": shard_id,
-                "status": "error",
-                "error": f"{type(outcome).__name__}: {outcome}",
-            }
-        if outcome.get("status") == "ok":
-            config = repo_path.split("/")[1]  # "data/<config>/train-...parquet"
-            if config not in hash_published:
-                upload_bytes(api, cfg.hf.repo_id, plan_hash.encode(), plan_hash_path(config))
-                hash_published.add(config)
-        total_audio += outcome.get("audio_seconds") or 0.0
-        print(json.dumps(outcome, ensure_ascii=False))
-    print(f"done: {total_audio / 3600:.2f} h of audio generated")
+    # ok/empty/error counts across the whole run (Fix C4) -- printed in the final
+    # summary and what decides the process exit code, so a systematically failing
+    # run can never again print "0.00 h generated" and exit 0.
+    counts: dict[str, int] = {}
+
+    def _dispatch(batch: list[tuple[str, str, str]]) -> list[dict]:
+        """Run one batch of shards through Modal, printing/accounting each outcome."""
+        nonlocal total_audio
+        results = []
+        for (shard_id, repo_path, _), outcome in zip(
+            batch, synth.run_shard.starmap(batch, return_exceptions=True)
+        ):
+            if isinstance(outcome, Exception):
+                # Modal itself failed to deliver a result (e.g. a container crash),
+                # rather than the application-level failure Synthesizer.run_shard
+                # already converts to a "status": "error" dict. Either way, one
+                # shard's failure must not stop the rest of the dispatch loop.
+                outcome = {
+                    "shard_id": shard_id,
+                    "status": "error",
+                    "error": f"{type(outcome).__name__}: {outcome}",
+                }
+            status = outcome.get("status", "error")
+            counts[status] = counts.get(status, 0) + 1
+            if status == "ok":
+                config = repo_path.split("/")[1]  # "data/<config>/train-...parquet"
+                if config not in hash_published:
+                    upload_bytes(api, cfg.hf.repo_id, hashes[config].encode(), plan_hash_path(config))
+                    hash_published.add(config)
+            total_audio += outcome.get("audio_seconds") or 0.0
+            print(json.dumps(outcome, ensure_ascii=False))
+            results.append(outcome)
+        return results
+
+    first_batch, rest = calls[:_CIRCUIT_BREAKER_SHARDS], calls[_CIRCUIT_BREAKER_SHARDS:]
+    first_results = _dispatch(first_batch)
+    # Only trip early if there was actually a full batch to judge AND more work
+    # left to protect -- a short run (fewer than the threshold, or nothing left
+    # after the first batch) falls through to the aggregate exit-code check below.
+    if (
+        rest
+        and len(first_results) >= _CIRCUIT_BREAKER_SHARDS
+        and all(r.get("status") != "ok" for r in first_results)
+    ):
+        print(
+            f"aborting: the first {len(first_results)} dispatched shard(s) all "
+            f"failed -- nothing is succeeding, refusing to burn the remaining "
+            f"{len(rest)} shard(s)' GPU budget",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if rest:
+        _dispatch(rest)
+
+    total = sum(counts.values())
+    summary = " ".join(f"{status}={n}" for status, n in sorted(counts.items()))
+    print(f"done: {total_audio / 3600:.2f} h of audio generated | {total} shard(s): {summary}")
+    if counts.get("ok", 0) != total:
+        sys.exit(1)
