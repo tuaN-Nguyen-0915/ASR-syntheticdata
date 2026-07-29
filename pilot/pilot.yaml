@@ -1,0 +1,23 @@
+# Pilot config — 3 conversations (~37 utterances) to npat1509/TestSynth.
+# Purpose: measure the REAL chars/sec (every cost figure depends on it),
+# hear the audio, and prove the Modal path end to end. Not a production run.
+hf:
+  repo_id: "npat1509/TestSynth"
+  private: false
+speaker:
+  policy: per_conversation
+  seed_salt: "pilot-v1"
+engine:
+  concurrency: 16          # modest for a 1-shard pilot; sweep later
+  max_num_seqs: 64
+  gpu_memory_utilization: 0.94
+  cfg_value: 2.0
+  temperature: 1.0
+  inference_timesteps: 24
+text:
+  chunk_target_seconds: 12.0
+  chars_per_sec: 14.0      # UNMEASURED assumption — the pilot replaces this
+run:
+  gpu: "A100-40GB"
+  convs_per_shard: 3       # all 3 conversations in ONE shard
+  configs: ["vietnamese"]
