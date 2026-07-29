@@ -63,9 +63,13 @@ async def test_audio_is_resampled_to_16k():
 
 
 async def test_keeps_the_engine_busy_with_many_concurrent_requests():
+    # Floor: with 40 utterances (far more than enough to saturate 8 slots), peak
+    # concurrency must actually REACH the configured limit, not merely exceed 1 --
+    # a fan-out regression to e.g. peak=2 would still pass a `> 1` assertion.
     engine = FakeEngine()
-    await run_shard("vi-00000", [_row(i) for i in range(40)], engine, _REFS, _cfg(concurrency=8))
-    assert engine.peak_concurrency > 1
+    cfg = _cfg(concurrency=8)
+    await run_shard("vi-00000", [_row(i) for i in range(40)], engine, _REFS, cfg)
+    assert engine.peak_concurrency >= cfg.engine.concurrency
 
 
 async def test_never_exceeds_the_configured_concurrency():
@@ -145,3 +149,55 @@ async def test_row_order_follows_the_plan():
 async def test_missing_reference_latents_raises():
     with pytest.raises(KeyError):
         await run_shard("vi-00000", [_row(0)], FakeEngine(), {}, _cfg())
+
+
+async def test_qc_retry_uses_a_different_seed_than_the_first_attempt():
+    # chars_per_sec mismatch makes every attempt fail QC, so both the initial
+    # generation and the reseeded retry run. A single-chunk utterance means exactly
+    # two engine calls; their seeds must differ, or "regenerate with a different
+    # seed" is a no-op that would never actually produce different audio.
+    engine = FakeEngine(chars_per_sec=14.0)
+    rows, result = await run_shard("vi-00000", [_row(0)], engine, _REFS, _cfg(),
+                                   chars_per_sec=1000.0)
+    assert rows == []
+    assert result.n_failed == 1
+    seeds_used = [call.seed for call in engine.calls]
+    assert len(seeds_used) == 2
+    assert len(set(seeds_used)) == 2
+
+
+async def test_downstream_error_is_recorded_not_fatal_to_the_shard(monkeypatch):
+    # Simulates a bug in post-processing (e.g. build_row's schema check raising) for
+    # exactly one row. The other rows must still come back and the bad row must be
+    # recorded as a failure -- not propagate out of run_shard and discard everything.
+    import meddies_tts.runner as runner_module
+
+    real_build_row = runner_module.build_row
+    bad_path = _row(1)["audio_path"]
+
+    def flaky_build_row(row, *args, **kwargs):
+        if row["audio_path"] == bad_path:
+            raise ValueError("boom")
+        return real_build_row(row, *args, **kwargs)
+
+    monkeypatch.setattr(runner_module, "build_row", flaky_build_row)
+
+    plan = [_row(0), _row(1), _row(2)]
+    rows, result = await run_shard("vi-00000", plan, FakeEngine(), _REFS, _cfg())
+
+    assert len(rows) == 2
+    assert result.n_failed == 1
+    assert result.failures[0]["audio_path"] == bad_path
+    assert result.failures[0]["reason"] == "unexpected_error"
+
+
+async def test_missing_audio_path_is_recorded_not_a_crash():
+    # A row missing "audio_path" makes the failure-handler's own row["audio_path"]
+    # lookup raise a second KeyError that used to escape uncaught. The handler must
+    # be defensive (row.get) so this degrades to a recorded failure instead.
+    row = _row(0)
+    del row["audio_path"]
+    rows, result = await run_shard("vi-00000", [row], FakeEngine(), _REFS, _cfg())
+    assert rows == []
+    assert result.n_failed == 1
+    assert result.failures[0]["audio_path"] == "<unknown>"

@@ -31,6 +31,11 @@ class ShardResult:
     failures: list[dict] = field(default_factory=list)
 
 
+def _failure(row: dict, reason: str, detail: str) -> dict:
+    """Build a failure record; row.get keeps this from raising if audio_path itself is missing."""
+    return {"audio_path": row.get("audio_path", "<unknown>"), "reason": reason, "detail": detail}
+
+
 async def _synthesize_chunk(
     engine: TTSEngine,
     semaphore: asyncio.Semaphore,
@@ -49,7 +54,9 @@ async def _synthesize_chunk(
                 return await engine.synthesize(text, ref_latents, seed + attempt)
             except Exception as error:  # noqa: BLE001 - retried, then surfaced
                 last = error
-    raise RuntimeError(f"chunk generation failed after {max_retries + 1} attempts: {last}")
+    # `from last` keeps the original engine traceback attached for logs, instead of a
+    # bare RuntimeError that hides which underlying exception actually failed.
+    raise RuntimeError(f"chunk generation failed after {max_retries + 1} attempts: {last}") from last
 
 
 async def _synthesize_once(
@@ -105,30 +112,31 @@ async def _synthesize_utterance(
         except Exception as error:  # noqa: BLE001 - recorded as a shard failure
             # A chunk that exhausted its retries drops only this utterance; the caller's
             # gather() keeps running the rest of the shard.
-            return None, {
-                "audio_path": row["audio_path"],
-                "reason": "engine_error",
-                "detail": str(error),
-            }
-        verdict = check_audio(
-            wave, TARGET_SAMPLE_RATE, len(row["text_spoken"]), chars_per_sec
-        )
-        if verdict.ok:
-            built = build_row(
-                row,
-                to_flac_bytes(wave, TARGET_SAMPLE_RATE),
-                duration_seconds(wave, TARGET_SAMPLE_RATE),
-                n_chunks,
-                seed,
-                engine.version,
+            return None, _failure(row, "engine_error", str(error))
+        # check_audio and build_row are inside the try too: a bug in either (e.g.
+        # build_row's schema check) must degrade to a recorded failure for this one
+        # utterance, not an uncaught exception that would blow up run_shard's gather
+        # and discard every other utterance's already-completed audio.
+        try:
+            verdict = check_audio(
+                wave, TARGET_SAMPLE_RATE, len(row["text_spoken"]), chars_per_sec
             )
-            return built, None
-        last_reason = f"qc:{verdict.reason}"
-    return None, {
-        "audio_path": row["audio_path"],
-        "reason": last_reason,
-        "detail": "failed QC on both the initial attempt and the reseeded retry",
-    }
+            if verdict.ok:
+                built = build_row(
+                    row,
+                    to_flac_bytes(wave, TARGET_SAMPLE_RATE),
+                    duration_seconds(wave, TARGET_SAMPLE_RATE),
+                    n_chunks,
+                    seed,
+                    engine.version,
+                )
+                return built, None
+            last_reason = f"qc:{verdict.reason}"
+        except Exception as error:  # noqa: BLE001 - recorded as a shard failure
+            return None, _failure(row, "unexpected_error", f"{type(error).__name__}: {error}")
+    return None, _failure(
+        row, last_reason, "failed QC on both the initial attempt and the reseeded retry"
+    )
 
 
 async def run_shard(
@@ -150,17 +158,34 @@ async def run_shard(
     # utterance before starting the next. The engine's batcher only sees concurrent work
     # if concurrent work is actually submitted; a per-utterance loop would starve it.
     semaphore = asyncio.Semaphore(cfg.engine.concurrency)
+    # return_exceptions=True: _synthesize_utterance already turns every failure mode we
+    # anticipated into a (None, failure_dict) result, but if something we DIDN'T
+    # anticipate still escapes it, the default return_exceptions=False would make this
+    # gather raise -- discarding every other utterance's already-completed audio along
+    # with it. With return_exceptions=True a rogue exception becomes just one more
+    # outcome to convert into a failure record below, so the shard always degrades to
+    # "N utterances failed" rather than "nothing came back".
     outcomes = await asyncio.gather(
         *(
             _synthesize_utterance(
                 row, engine, semaphore, refs, cfg, chars_per_sec, max_chunk_retries
             )
             for row in plan_rows
-        )
+        ),
+        return_exceptions=True,
     )
 
-    rows = [built for built, _ in outcomes if built is not None]
-    failures = [failure for _, failure in outcomes if failure is not None]
+    rows: list[dict] = []
+    failures: list[dict] = []
+    for row, outcome in zip(plan_rows, outcomes):
+        if isinstance(outcome, Exception):
+            failures.append(_failure(row, "unexpected_error", f"{type(outcome).__name__}: {outcome}"))
+            continue
+        built, failure = outcome
+        if built is not None:
+            rows.append(built)
+        else:
+            failures.append(failure)
     return rows, ShardResult(
         shard_id=shard_id,
         n_utterances=len(plan_rows),
