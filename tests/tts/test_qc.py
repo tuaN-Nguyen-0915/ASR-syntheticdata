@@ -18,8 +18,27 @@ def test_accepts_audio_of_the_expected_duration():
 
 
 def test_accepts_within_the_tolerance_band():
-    assert check_audio(_tone(5.0), 16000, 140).ok   # 0.5x
-    assert check_audio(_tone(25.0), 16000, 140).ok  # 2.5x
+    # Bounds are 0.6x-2.0x, calibrated on the pilot, where every utterance that
+    # sounded correct fell in 0.77x-1.64x. These two sit just inside that band.
+    assert check_audio(_tone(7.5), 16000, 140).ok   # 0.75x
+    assert check_audio(_tone(16.0), 16000, 140).ok  # 1.6x
+
+
+def test_rejects_the_runaway_generation_the_pilot_found():
+    # Regression for a real defect: VoxCPM2 babbled past the end of a 52-char line,
+    # producing 7.8s of audio where ~3.1s was due (2.51x). It was inaudible garbage,
+    # and the original 3.0x ceiling passed it through to the published dataset.
+    result = check_audio(_tone(25.0), 16000, 140)  # 2.5x, the observed ratio
+    assert not result.ok
+    assert result.reason == "too_long"
+
+
+def test_rejects_a_truncated_generation():
+    # The mirror failure: the model stopping early. The original 0.3x floor would
+    # have accepted an utterance missing two thirds of its speech.
+    result = check_audio(_tone(4.0), 16000, 140)  # 0.4x
+    assert not result.ok
+    assert result.reason == "too_short"
 
 
 def test_rejects_empty_audio():

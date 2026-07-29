@@ -22,8 +22,16 @@ def check_audio(
     sample_rate: int,
     n_chars: int,
     chars_per_sec: float = DEFAULT_CHARS_PER_SEC,
-    min_ratio: float = 0.3,
-    max_ratio: float = 3.0,
+    # Calibrated against the 54-utterance pilot, not guessed: observed ratios were
+    # median 0.99, stdev 0.25, spanning 0.77-1.64 for utterances that sound correct.
+    # The one degenerate generation (the model babbling past the end of a 52-char
+    # line, 7.8s where 3.1s was due) sat at 2.51 -- and sailed through the original
+    # 0.3/3.0 bounds, which were wide enough that nothing could ever trip them.
+    # 0.6/2.0 keeps ~1.5x margin around the observed good range on both sides.
+    # A rejection costs one reseeded regeneration, not a dropped utterance, so
+    # erring tight is cheap; erring loose ships garbage.
+    min_ratio: float = 0.6,
+    max_ratio: float = 2.0,
     silence_rms: float = 1e-4,
 ) -> QCResult:
     """Cheap sanity checks catching dead, truncated and runaway generations."""
