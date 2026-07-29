@@ -1,6 +1,7 @@
 import io
 
 import pyarrow.parquet as pq
+import pytest
 import soundfile as sf
 from datasets import Audio, load_dataset
 
@@ -120,7 +121,19 @@ def test_written_audio_bytes_are_flac(tmp_path):
 
 
 def test_empty_row_list_raises(tmp_path):
-    import pytest
-
     with pytest.raises(ValueError, match="no rows"):
         write_shard([], tmp_path / "shard.parquet", "h", "{}")
+
+
+def test_row_missing_a_declared_key_raises(tmp_path):
+    row = build_row(_plan_row(), _flac(), 1.0, 1, 1, "v")
+    del row["disease_name"]
+    with pytest.raises(ValueError, match="disease_name"):
+        write_shard([row], tmp_path / "shard.parquet", "h", "{}")
+
+
+def test_row_with_an_extra_key_raises(tmp_path):
+    row = build_row(_plan_row(), _flac(), 1.0, 1, 1, "v")
+    row["unexpected_column"] = "surprise"
+    with pytest.raises(ValueError, match="unexpected_column"):
+        write_shard([row], tmp_path / "shard.parquet", "h", "{}")

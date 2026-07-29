@@ -56,6 +56,20 @@ def write_shard(rows: list[dict], path: Path, plan_hash: str, config_json: str) 
     """Write one shard, embedding plan_hash and resolved config as file metadata."""
     if not rows:
         raise ValueError("write_shard received no rows")
+    # pa.Table.from_pylist with an explicit schema does not validate a row's key
+    # set -- a missing key is silently written as a NULL cell, not an error. With
+    # ~700k rows per run, that would nullify a whole column across a shard with no
+    # error anywhere. Require an exact key-set match (this also rejects extra keys,
+    # so a typo'd column name can't slip a stray field past the schema).
+    expected_keys = set(FEATURES)
+    for index, row in enumerate(rows):
+        if set(row) != expected_keys:
+            missing = expected_keys - set(row)
+            extra = set(row) - expected_keys
+            raise ValueError(
+                f"row {index} keys do not match FEATURES: missing={sorted(missing)}, "
+                f"extra={sorted(extra)}"
+            )
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -70,8 +84,19 @@ def write_shard(rows: list[dict], path: Path, plan_hash: str, config_json: str) 
     # the audio column as an Audio feature at TARGET_SAMPLE_RATE -- that's what keeps
     # the published dataset's audio decodable instead of degrading to raw bytes.
     table = pa.Table.from_pylist(rows, schema=FEATURES.arrow_schema)
-    # Extend (never replace) that existing metadata with our own provenance keys.
     metadata = dict(table.schema.metadata or {})
+    # Guards against unpinned-`datasets` drift: requirements.txt floors datasets at
+    # >=2.14 with no ceiling, and a future release could stop attaching this key
+    # (as already happened to Dataset.from_list() in this same module -- see the
+    # comment above). Without this check, write_shard would keep succeeding while
+    # silently emitting shards whose audio column has decayed to a plain
+    # struct<bytes, path>, undetectable until someone tries to load the audio.
+    if b"huggingface" not in metadata:
+        raise ValueError(
+            "FEATURES.arrow_schema is missing b'huggingface' metadata -- the Audio "
+            "feature typing would be lost and the published dataset would not decode"
+        )
+    # Extend (never replace) that existing metadata with our own provenance keys.
     metadata[b"plan_hash"] = plan_hash.encode("utf-8")
     metadata[b"config_json"] = config_json.encode("utf-8")
     pq.write_table(table.replace_schema_metadata(metadata), path, compression="zstd")
