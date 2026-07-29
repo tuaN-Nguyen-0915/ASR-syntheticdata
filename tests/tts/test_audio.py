@@ -140,16 +140,15 @@ def test_join_applies_loudness_matching():
 
 
 def test_match_loudness_peak_limiter_triggers():
-    # Construct chunks where clamped gain (2.0x) pushes post-gain peak above ceiling.
-    # A loud chunk near full scale with a quieter chunk ensures the quiet chunk's
-    # 2.0x gain overshoots the ceiling, so peak limiting must clamp the output.
-    loud = np.sin(2 * np.pi * 440 * np.linspace(0, 0.5, 24000)).astype(np.float32) * 0.95
-    quiet = np.sin(2 * np.pi * 440 * np.linspace(0, 0.5, 24000)).astype(np.float32) * 0.15
-    out = match_loudness([loud, quiet])
-    # The quiet chunk, when scaled by the clamped gain of 2.0, would reach 0.30.
-    # But if the target RMS is the median (closer to loud), quiet gets closer to 2.0x.
-    # In any case, with a 0.99 ceiling, the peak must not exceed 1.0.
-    assert all(float(np.max(np.abs(w))) <= 1.0 for w in out)
+    # A spiky chunk has a high peak but low RMS, so it earns a large gain while
+    # already sitting near full scale -- the only shape that can overshoot the
+    # ceiling. A quiet *sine* cannot: its peak and RMS are locked together.
+    spiky = np.zeros(24000, dtype=np.float32)
+    spiky[::10] = 0.95                      # rms ~0.300, peak 0.95
+    steady = _tone(0.5, 48000) * 2.0        # rms ~0.42, peak ~0.6
+    out = match_loudness([spiky, steady, steady])
+    # Un-limited, gain 1.412 would push the peak to 1.342; the limiter must pull it back.
+    assert float(np.max(np.abs(out[0]))) == pytest.approx(0.99, abs=1e-4)
 
 
 def test_flac_encoding_clips_resampling_overshoot():
