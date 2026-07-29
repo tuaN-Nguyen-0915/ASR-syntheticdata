@@ -22,13 +22,15 @@ def match_loudness(waves: list[np.ndarray], ceiling: float = 0.99) -> list[np.nd
     noise, and the result is peak-limited to avoid clipping.
     """
     levels = [_rms(wave) for wave in waves]
-    usable = [level for level in levels if level > 1e-5]
+    usable = [level for level in levels if level > 1e-5 and np.isfinite(level)]
     if len(waves) < 2 or not usable:
         return waves
     target = float(np.median(usable))
     matched: list[np.ndarray] = []
     for wave, level in zip(waves, levels):
-        if level <= 1e-5:
+        if level <= 1e-5 or not np.isfinite(level):
+            # Pass through silent or non-finite chunks unscaled; detecting and rejecting
+            # non-finite audio is QC's job (Task 9), and this branch avoids corrupting it.
             matched.append(wave)
             continue
         # Gain is clamped between 0.5 and 2.0 to avoid amplifying near-silent chunks into noise.
@@ -68,8 +70,11 @@ def resample(wave: np.ndarray, src_sr: int, dst_sr: int) -> np.ndarray:
 
 def to_flac_bytes(wave: np.ndarray, sample_rate: int) -> bytes:
     """Encode wave as mono FLAC at 16-bit precision."""
+    # Resampling can overshoot a peak-limited signal via Gibbs ringing,
+    # so clipping must be the final guard before encoding.
+    clipped = np.clip(wave, -1.0, 1.0)
     buffer = io.BytesIO()
-    sf.write(buffer, wave, sample_rate, format="FLAC", subtype="PCM_16")
+    sf.write(buffer, clipped, sample_rate, format="FLAC", subtype="PCM_16")
     return buffer.getvalue()
 
 

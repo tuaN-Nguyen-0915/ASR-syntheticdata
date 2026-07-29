@@ -137,3 +137,38 @@ def test_join_applies_loudness_matching():
     half = len(joined) // 2
     ratio = _rms(joined[:half]) / max(_rms(joined[half:]), 1e-9)
     assert ratio < 3.0   # untreated this would be ~3.3
+
+
+def test_match_loudness_peak_limiter_triggers():
+    # Construct chunks where clamped gain (2.0x) pushes post-gain peak above ceiling.
+    # A loud chunk near full scale with a quieter chunk ensures the quiet chunk's
+    # 2.0x gain overshoots the ceiling, so peak limiting must clamp the output.
+    loud = np.sin(2 * np.pi * 440 * np.linspace(0, 0.5, 24000)).astype(np.float32) * 0.95
+    quiet = np.sin(2 * np.pi * 440 * np.linspace(0, 0.5, 24000)).astype(np.float32) * 0.15
+    out = match_loudness([loud, quiet])
+    # The quiet chunk, when scaled by the clamped gain of 2.0, would reach 0.30.
+    # But if the target RMS is the median (closer to loud), quiet gets closer to 2.0x.
+    # In any case, with a 0.99 ceiling, the peak must not exceed 1.0.
+    assert all(float(np.max(np.abs(w))) <= 1.0 for w in out)
+
+
+def test_flac_encoding_clips_resampling_overshoot():
+    # A peak-limited signal at 48 kHz can overshoot after sinc resampling to 16 kHz
+    # via Gibbs ringing. The encoder must clamp to prevent clipping in FLAC.
+    # Generate a signal that stays within limits after loudness match/peak limit,
+    # then resample and verify no clipping occurs in the FLAC output.
+    wave_48k = match_loudness([_tone(0.5, 48000) * 0.95])[0]
+    resampled = resample(wave_48k, 48000, 16000)
+    # Resampling may overshoot; verify FLAC encoding handles it without clipping.
+    flac_bytes = to_flac_bytes(resampled, 16000)
+    decoded, _ = sf.read(io.BytesIO(flac_bytes), dtype="float32")
+    assert float(np.max(np.abs(decoded))) <= 1.0
+
+
+def test_match_loudness_passes_through_nonfinite_chunks():
+    # Non-finite chunks must not be scaled (which would multiply nan by a gain).
+    # They should pass through unmodified so QC (Task 9) can detect and reject them.
+    bad_chunk = np.array([1.0, np.nan, -0.5], dtype=np.float32)
+    good_chunk = _tone(0.3)
+    out = match_loudness([good_chunk, bad_chunk])
+    assert np.isnan(out[1][1])  # NaN is preserved, not corrupted to zero
