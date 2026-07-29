@@ -14,7 +14,7 @@ engine:
   max_num_seqs: 64
   max_num_batched_tokens: 16384
   cfg_value: 2.0
-  temperature: 0.7
+  temperature: 1.0
   inference_timesteps: 24
   gpu_memory_utilization: 0.94    # more KV-cache headroom for concurrent sequences;
                                    # pilot should sweep this alongside concurrency

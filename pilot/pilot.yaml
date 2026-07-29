@@ -12,7 +12,7 @@ engine:
   max_num_seqs: 64
   gpu_memory_utilization: 0.94
   cfg_value: 2.0
-  temperature: 0.7
+  temperature: 1.0
   inference_timesteps: 24
 text:
   chunk_target_seconds: 12.0

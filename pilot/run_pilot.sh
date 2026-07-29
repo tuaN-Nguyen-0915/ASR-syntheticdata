@@ -79,8 +79,8 @@ do_setup() {
   fi
 
   step "Building the image and fetching VoxCPM2 weights"
-  echo "  This compiles flash-attn from source on a CUDA base image."
-  echo "  It has never run before — this is the step most likely to fail."
+  echo "  Uses a prebuilt flash-attn wheel pinned to torch 2.8.0+cu128 (see app.py)."
+  echo "  Cached after the first build; a rebuild only happens if app.py's image changes."
   modal run app.py::fetch_weights
 
   green ""
