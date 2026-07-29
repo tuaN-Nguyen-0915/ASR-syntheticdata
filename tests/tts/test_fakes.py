@@ -43,9 +43,11 @@ async def test_encode_reference_returns_bytes():
 
 async def test_records_calls_for_assertions():
     engine = FakeEngine()
-    await engine.synthesize("một", b"ref", 1)
-    await engine.synthesize("hai", b"ref", 2)
+    await engine.synthesize("một", b"ref1", 1)
+    await engine.synthesize("hai", b"ref2", 2)
     assert [call.text for call in engine.calls] == ["một", "hai"]
+    assert [call.ref_latents for call in engine.calls] == [b"ref1", b"ref2"]
+    assert [call.seed for call in engine.calls] == [1, 2]
 
 
 async def test_fail_texts_raise_until_retries_are_exhausted():
@@ -64,3 +66,22 @@ async def test_tracks_peak_concurrency():
     engine = FakeEngine()
     await asyncio.gather(*(engine.synthesize(f"t{i}", b"ref", i) for i in range(8)))
     assert engine.peak_concurrency >= 2
+
+
+async def test_thousands_of_distinct_seeds_produce_distinct_audio():
+    """Verify that seed affects waveform across a wide range; regression test for 90% seed collision."""
+    engine = FakeEngine()
+    text = "x" * 100  # Fixed text length ensures duration is constant.
+    num_seeds = 2000
+    waveforms = {}
+    for seed in range(num_seeds):
+        wave = await engine.synthesize(text, b"ref", seed)
+        # Use bytes representation as key to detect byte-identical outputs.
+        key = wave.tobytes()
+        if key not in waveforms:
+            waveforms[key] = []
+        waveforms[key].append(seed)
+    # Expect roughly one waveform per seed (allowing for tiny floating-point variations).
+    # With good RNG-based waveform, distinct_count should be close to num_seeds.
+    distinct_count = len(waveforms)
+    assert distinct_count > num_seeds * 0.95, f"Only {distinct_count}/{num_seeds} seeds produced distinct audio"
