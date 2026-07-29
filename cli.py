@@ -10,6 +10,15 @@ from pathlib import Path
 import pyarrow.parquet as pq
 
 from meddies_tts.config import ConfigError, load_config
+from meddies_tts.hub import (
+    HubError,
+    PlanDriftError,
+    check_plan_drift,
+    list_repo_paths,
+    preflight,
+    remaining_targets,
+    shard_targets,
+)
 from meddies_tts.manifest import build_manifest, read_manifest, write_manifest
 from meddies_tts.plan import (
     build_plan,
@@ -21,12 +30,21 @@ from meddies_tts.plan import (
 from meddies_tts.qc import DEFAULT_CHARS_PER_SEC
 from meddies_tts.speakers import load_pool
 
-# Modal A100-40GB, USD/sec, from modal.com/pricing
+# Modal A100-40GB, USD/sec, verified against modal.com/pricing
 _A100_USD_PER_SEC = 0.000583
-# Aggregate realtime multiple at concurrency 48 on one GPU (spec §2)
+# Aggregate realtime multiple at concurrency 48 on one GPU (spec §1, Estimated outputs)
 _AGGREGATE_SPEEDUP = 70.0
-# 16 kHz 16-bit FLAC, bytes per second of audio
+# 16 kHz 16-bit FLAC, bytes per second of audio (spec §6)
 _FLAC_BYTES_PER_SEC = 19_000
+
+# Exit codes: ConfigError is a distinct case (2) from every other failure so a
+# wrapper script can tell "fix your config" from "something at runtime broke".
+# Drift gets its own code (3) because it is a deliberate, designed refusal
+# (see meddies_tts.hub.check_plan_drift), not an accident -- a caller should be
+# able to distinguish "the plan changed under you" from a generic error.
+_EXIT_CONFIG_ERROR = 2
+_EXIT_PLAN_DRIFT = 3
+_EXIT_ERROR = 1
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -94,9 +112,7 @@ def _cmd_plan(args, cfg) -> int:
 
 def _cmd_preflight(args, cfg) -> int:
     """Verify the HF token, repo existence and write access before any GPU is requested."""
-    from huggingface_hub import HfApi
-
-    from meddies_tts.hub import preflight
+    from huggingface_hub import HfApi  # imported lazily so `estimate` stays offline-safe
 
     preflight(HfApi(), cfg.hf.repo_id, cfg.hf.private)
     print(f"preflight OK: {cfg.hf.repo_id} is writable")
@@ -120,14 +136,7 @@ def _cmd_estimate(args, cfg) -> int:
 
 def _cmd_status(args, cfg) -> int:
     """Report done/remaining shards against the Hub, refusing on plan drift."""
-    from huggingface_hub import HfApi
-
-    from meddies_tts.hub import (
-        check_plan_drift,
-        list_repo_paths,
-        remaining_targets,
-        shard_targets,
-    )
+    from huggingface_hub import HfApi  # imported lazily so `estimate` stays offline-safe
 
     plan = read_plan(Path(args.plan))
     local_hash = Path(args.plan).with_suffix(".hash").read_text(encoding="utf-8").strip()
@@ -150,13 +159,32 @@ def _cmd_show_config(args, cfg) -> int:
     return 0
 
 
+def _resolve_inside(dest: Path, dest_resolved: Path, rel_path: str) -> Path:
+    """Resolve rel_path against dest, raising if it is absolute or escapes dest.
+
+    A shard is untrusted input by construction -- it can come straight from
+    the Hub -- so audio.path must never be trusted to stay inside dest.
+    pathlib silently drops the left operand when joined with an absolute
+    path (Path("/a/dest") / "/etc/x" == Path("/etc/x")), so an absolute path
+    is rejected outright before any join happens.
+    """
+    if Path(rel_path).is_absolute():
+        raise ValueError(f"shard is malformed: audio.path is absolute: {rel_path!r}")
+    target = (dest / rel_path).resolve()
+    if not target.is_relative_to(dest_resolved):
+        raise ValueError(f"shard is malformed: audio.path escapes --dest: {rel_path!r}")
+    return target
+
+
 def _cmd_materialize_tree(args, cfg) -> int:
     """Rebuild the output_full-shaped tree from a shard's embedded audio.path fields."""
     table = pq.read_table(Path(args.shard))
     dest = Path(args.dest)
+    # resolve(strict=False): dest need not exist yet, this only normalizes the path.
+    dest_resolved = dest.resolve()
     written = 0
     for record in table.column("audio").to_pylist():
-        target = dest / record["path"]
+        target = _resolve_inside(dest, dest_resolved, record["path"])
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(record["bytes"])
         written += 1
@@ -182,8 +210,27 @@ def main(argv: list[str] | None = None) -> int:
         cfg = load_config(Path(args.config), {"hf.repo_id": args.hf_repo})
     except ConfigError as error:
         print(f"error: {error}", file=sys.stderr)
-        return 2
-    return _COMMANDS[args.command](args, cfg)
+        return _EXIT_CONFIG_ERROR
+
+    # Every command below can hit an expected, operator-actionable failure (a
+    # missing file, a Hub problem, a malformed shard, drifted state). None of
+    # those should surface as a raw traceback -- an operator running `status`
+    # against a fresh repo, or a drifted plan, should see a clear refusal.
+    try:
+        return _COMMANDS[args.command](args, cfg)
+    except PlanDriftError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return _EXIT_PLAN_DRIFT
+    except HubError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return _EXIT_ERROR
+    except FileNotFoundError as error:
+        missing = error.filename or str(error)
+        print(f"error: file not found: {missing}", file=sys.stderr)
+        return _EXIT_ERROR
+    except ValueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return _EXIT_ERROR
 
 
 if __name__ == "__main__":

@@ -1,11 +1,14 @@
 # tests/tts/test_cli_tts.py
 import json
 
+import huggingface_hub
 import pytest
 
 import cli
+from meddies_tts.hub import plan_hash_path
 from meddies_tts.manifest import read_manifest
 from meddies_tts.plan import read_plan
+from tests.tts.test_hub import FakeApi
 
 _CONFIG = """
 hf:
@@ -135,3 +138,83 @@ def test_materialize_tree_rebuilds_the_output_full_shape(workspace, tmp_path):
     assert _run(workspace, "materialize-tree", "--shard", str(shard),
                 "--dest", str(dest)) == 0
     assert (dest / "vietnamese/suy_gan/conv_0001/Turn1/user.flac").exists()
+
+
+def _shard_with_audio_path(workspace, name, audio_path):
+    """Write a one-row shard whose audio.path is exactly the given (possibly malicious) value."""
+    from meddies_tts.audio import to_flac_bytes
+    from meddies_tts.writer import build_row, write_shard
+    import numpy as np
+
+    row = {
+        "config": "vietnamese", "disease_slug": "suy_gan", "disease_name": "Suy gan",
+        "conv_id": "conv_0001", "turn": 1, "role": "user",
+        "text_raw": "x", "text_spoken": "x", "speaker_id": 0,
+        "speaker_emotions": "neutral", "speaker_unique_source_s": 100.0,
+        "shard_id": "vi-00000",
+        "audio_path": audio_path,
+    }
+    shard = workspace / name
+    write_shard([build_row(row, to_flac_bytes(np.zeros(1600, dtype=np.float32), 16000),
+                           0.1, 1, 1, "v")], shard, "h", "{}")
+    return shard
+
+
+def test_materialize_tree_rejects_relative_traversal(workspace, tmp_path):
+    # A shard is untrusted input by construction (it may come straight from the
+    # Hub), so "../ESCAPED.flac" must not be allowed to land outside --dest.
+    shard = _shard_with_audio_path(workspace, "shard_traversal.parquet",
+                                    "../OUTSIDE/ESCAPED.flac")
+    dest = tmp_path / "tree"
+    code = _run(workspace, "materialize-tree", "--shard", str(shard), "--dest", str(dest))
+    assert code != 0
+    assert not (tmp_path / "OUTSIDE" / "ESCAPED.flac").exists()
+    assert not dest.exists() or not any(dest.rglob("*"))
+
+
+def test_materialize_tree_rejects_absolute_path(workspace, tmp_path):
+    # pathlib silently discards the left operand when joined with an absolute
+    # path: Path("/a/dest") / "/etc/x" == Path("/etc/x"). An absolute audio.path
+    # must be rejected outright, not silently honored.
+    escape_target = tmp_path / "ABSOLUTE_OUTSIDE" / "ABSOLUTE.flac"
+    shard = _shard_with_audio_path(workspace, "shard_absolute.parquet", str(escape_target))
+    dest = tmp_path / "tree2"
+    code = _run(workspace, "materialize-tree", "--shard", str(shard), "--dest", str(dest))
+    assert code != 0
+    assert not escape_target.exists()
+
+
+def _patch_hf_api(monkeypatch, fake_api):
+    """Make `from huggingface_hub import HfApi; HfApi()` inside cli.py hand back fake_api."""
+    monkeypatch.setattr(huggingface_hub, "HfApi", lambda *a, **kw: fake_api)
+
+
+def test_status_reports_all_remaining_on_a_fresh_repo(workspace, capsys, monkeypatch):
+    plan_out = _make_plan(workspace)
+    _patch_hf_api(monkeypatch, FakeApi(files=[]))  # nothing published yet, no hash file either
+    assert _run(workspace, "status", "--plan", str(plan_out)) == 0
+    out = capsys.readouterr().out
+    assert "done      : 0" in out
+    assert "remaining : 2" in out
+
+
+def test_status_exits_nonzero_on_plan_drift(workspace, capsys, monkeypatch):
+    plan_out = _make_plan(workspace)
+    # A hash published under a different value than the local plan simulates a
+    # repo whose shards were produced by a plan that has since changed underneath it.
+    fake_api = FakeApi(files=[], remote_files={plan_hash_path("vietnamese"): "not-the-local-hash"})
+    _patch_hf_api(monkeypatch, fake_api)
+    code = _run(workspace, "status", "--plan", str(plan_out))
+    assert code == cli._EXIT_PLAN_DRIFT
+    err = capsys.readouterr().err
+    assert err.startswith("error:")
+    assert "plan hash mismatch" in err
+
+
+def test_preflight_reports_a_clean_error_on_invalid_token(workspace, capsys, monkeypatch):
+    _patch_hf_api(monkeypatch, FakeApi(whoami=None))  # invalid/missing HF token
+    code = _run(workspace, "preflight")
+    assert code == cli._EXIT_ERROR
+    err = capsys.readouterr().err
+    assert err.startswith("error:")
+    assert "token" in err
