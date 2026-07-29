@@ -30,19 +30,86 @@ REFS_DIR = "/refs"
 # names the wrong hardware.
 _GPU = os.environ.get("MEDDIES_GPU", "A100-40GB")
 
+# Prebuilt flash-attn wheel. Every component of this filename is a compatibility
+# constraint: cp311 must match add_python, torch2.8 must match the torch pin, cu12
+# must match the CUDA base, and cxx11abiTRUE must match how that torch was built.
+# Change any one of them and this must change too.
+_FLASH_ATTN_WHEEL = (
+    "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3.post1/"
+    "flash_attn-2.8.3.post1+cu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl"
+)
+
+# Install order here is load-bearing and was established by a failed build, not by
+# guesswork. nano-vllm-voxcpm declares `flash_attn` as a dependency, and flash-attn's
+# setup.py imports torch to compute its own build requirements. So installing
+# requirements-gpu.txt in one pass makes pip try to build flash_attn under build
+# isolation before torch exists -> "ModuleNotFoundError: No module named 'torch'".
+# Each pip_install below is therefore a separate layer, in dependency order.
 image = (
     # A CUDA "devel" base is required, not debian_slim: flash-attn compiles CUDA
     # kernels from source under --no-build-isolation, which needs nvcc and a C/C++
-    # toolchain that debian_slim's minimal apt set does not provide.
-    modal.Image.from_registry("nvidia/cuda:12.4.1-devel-ubuntu22.04", add_python="3.11")
+    # toolchain that debian_slim's minimal apt set does not provide. 12.9.0 matches
+    # a production Modal image known to build torch/flash-attn successfully, and
+    # pairs with the cu128 wheels below.
+    modal.Image.from_registry("nvidia/cuda:12.9.0-devel-ubuntu22.04", add_python="3.11")
     # CUDA base images ship their own ENTRYPOINT, which can interfere with how
     # Modal starts the container process. Clearing it is a known-safe pattern
     # from a working production Modal setup on the same kind of CUDA devel base.
     .entrypoint([])
-    .apt_install("git", "ffmpeg")
+    # build-essential because the CUDA devel image ships nvcc but NO C++ host
+    # compiler -- an hour-long flash-attn build died on "clang++ not found".
+    # flash-attn now comes from a prebuilt wheel, but anything else that needs
+    # to compile a C extension would hit the same wall.
+    .apt_install("git", "ffmpeg", "build-essential")
+    # 1. torch alone, first, pinned to a build compiled for the SAME CUDA as the
+    #    base image. This must use index_url, not extra_index_url: extra_index_url
+    #    is additive, so PyPI still wins and supplies a torch compiled for CUDA
+    #    13.0, which then fails flash-attn's build with
+    #    "detected CUDA version (12.9) mismatches ... PyTorch (13.0)".
+    #    extra_index_url then points back at PyPI so torch's own pure-Python
+    #    dependencies (sympy, networkx, filelock, ...) still resolve.
+    #    cu128 wheels pair with the 12.9 base; nano-vllm-voxcpm needs
+    #    torch!=2.6.*,>=2.5.0, and cu124 tops out at 2.6.0, so cu128 is required. Pinned to 2.8.0
+    #    because that is the torch version the prebuilt flash-attn wheel below
+    #    was compiled against -- they must match exactly.
+    .pip_install(
+        # The whole torch family must come from ONE CUDA index and be version-matched.
+        # Installed separately, pip takes torchaudio/torchcodec from PyPI, which now
+        # ships CUDA-13 builds -- they import fine until a compiled op loads, then
+        # fail with "libcudart.so.13: cannot open shared object file".
+        "torch==2.8.0",
+        "torchaudio==2.8.0",
+        "torchcodec==0.7.0",
+        index_url="https://download.pytorch.org/whl/cu128",
+        extra_index_url="https://pypi.org/simple",
+    )
+    # 2. flash-attn from a PREBUILT wheel, not from source.
+    #    Building it from source took over an hour and then failed at link time with
+    #    "command 'clang++' failed: No such file or directory" -- the CUDA devel image
+    #    ships nvcc but no C++ host compiler. Rather than add build-essential and pay
+    #    the compile cost on every cache miss, use the wheel upstream already built.
+    #    The wheel encodes cp311 + torch2.8 + cu12 + a C++ ABI flag, and ALL of those
+    #    must match this image: hence add_python="3.11" and torch pinned to 2.8.0.
+    #    Installed BEFORE nano-vllm-voxcpm so its flash_attn dependency is already
+    #    satisfied and never triggers a source build.
+    .pip_install(_FLASH_ATTN_WHEEL)
+    # Fail fast if the ABI flag is wrong: a mismatch shows up as an ImportError on
+    # the compiled extension. Catching it here costs seconds; catching it at run
+    # time costs a container boot on a paid GPU.
+    .run_commands("python -c 'import flash_attn; print(\"flash_attn\", flash_attn.__version__)'")
+    # 3. the CPU-side dependencies shared with local development
     .pip_install_from_requirements("requirements.txt")
+    # 4. finally the GPU stack, whose heavy build-time dependencies now all exist
     .pip_install_from_requirements("requirements-gpu.txt")
-    .pip_install("flash-attn", extra_options="--no-build-isolation")
+    # Import the whole GPU stack at BUILD time. nano-vllm-voxcpm pulls torchaudio
+    # and torchcodec from PyPI with no torch pin, so pip is free to install versions
+    # compiled against a different torch than the one pinned above -- a mismatch that
+    # only shows up when a compiled extension is imported. Catching that here costs
+    # seconds on a builder; catching it in @modal.enter() costs a boot on a paid GPU.
+    .run_commands(
+        "python -c 'import torch, torchaudio, torchcodec, flash_attn, nanovllm_voxcpm; "
+        "print(\"stack OK torch\", torch.__version__, \"cuda\", torch.version.cuda)'"
+    )
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
     .add_local_python_source("meddies_tts")
 )
@@ -107,6 +174,7 @@ class Synthesizer:
 
         from meddies_tts.config import load_config
         from meddies_tts.engine import VoxCPMEngine
+        from meddies_tts.hub import preflight
         from meddies_tts.plan import read_plan
         from meddies_tts.speakers import load_pool
 
@@ -116,6 +184,14 @@ class Synthesizer:
         # file, so an unrelated config's shards can never trip drift detection here.
         self.plan_hashes = json.loads(Path(f"{PLAN_DIR}/shard_plan.hash").read_text())
         self.api = HfApi()
+
+        # Prove THIS container's token can actually write, before spending any GPU.
+        # main()'s preflight runs on the dispatching machine with the developer's own
+        # token; the container authenticates with the Modal Secret instead, so the two
+        # can disagree -- and did: a local "preflight OK" was followed by a 401 that
+        # discarded a fully generated shard, because upload only happens after run().
+        # Running it here, before the engine load, turns that into a boot-time failure.
+        preflight(self.api, self.cfg.hf.repo_id, self.cfg.hf.private)
 
         # Load the engine ONCE per container — this is what makes the shard-as-work-unit
         # design pay for itself across ~1,500 utterances.
