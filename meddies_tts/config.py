@@ -132,3 +132,15 @@ def _validate(cfg: Config) -> None:
             f"engine.max_num_seqs ({cfg.engine.max_num_seqs}); extra requests would "
             "only queue inside the engine"
         )
+    if cfg.text.chars_per_sec <= 0:
+        raise ConfigError(
+            f"text.chars_per_sec must be positive, got {cfg.text.chars_per_sec}"
+        )
+    if cfg.text.chunk_target_seconds <= 0:
+        raise ConfigError(
+            f"text.chunk_target_seconds must be positive, got {cfg.text.chunk_target_seconds}"
+        )
+    if cfg.run.convs_per_shard <= 0:
+        raise ConfigError(
+            f"run.convs_per_shard must be positive, got {cfg.run.convs_per_shard}"
+        )

@@ -71,3 +71,23 @@ def test_calibrated_chars_per_sec_shifts_the_band():
 
 def test_detail_is_populated_on_failure():
     assert check_audio(_tone(1.0), 16000, 140).detail
+
+
+def test_rejects_silence_below_threshold():
+    # RMS of sine wave with amplitude A is A/sqrt(2).
+    # silence_rms default is 1e-4. Generate audio with RMS just below it.
+    # amplitude = 0.9e-4 * sqrt(2) ≈ 1.273e-4
+    amplitude_below = 0.9e-4 * np.sqrt(2)
+    wave = _tone(10.0, amplitude=amplitude_below)
+    result = check_audio(wave, 16000, 140)
+    assert not result.ok
+    assert result.reason == "silent"
+
+
+def test_accepts_silence_above_threshold():
+    # Generate audio with RMS just above the 1e-4 threshold.
+    # amplitude = 1.1e-4 * sqrt(2) ≈ 1.556e-4
+    amplitude_above = 1.1e-4 * np.sqrt(2)
+    wave = _tone(10.0, amplitude=amplitude_above)
+    result = check_audio(wave, 16000, 140)
+    assert result.ok

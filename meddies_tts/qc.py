@@ -35,10 +35,19 @@ def check_audio(
     if not np.all(np.isfinite(wave)):
         return QCResult(False, "not_finite", "wave contains NaN or inf")
     rms = float(np.sqrt(np.mean(np.square(wave, dtype=np.float64))))
+    # Check silent before no_text: if both conditions hold, silent is the more useful
+    # signal — a completely silent utterance cannot be listened to regardless of
+    # whether it has text or not.
     if rms < silence_rms:
         return QCResult(False, "silent", f"rms={rms:.2e} < {silence_rms:.0e}")
     if n_chars <= 0:
         return QCResult(False, "no_text", "utterance has no spoken text")
+
+    # Guard against bad parameters before division.
+    if sample_rate <= 0:
+        return QCResult(False, "bad_params", f"sample_rate={sample_rate} must be positive")
+    if chars_per_sec <= 0:
+        return QCResult(False, "bad_params", f"chars_per_sec={chars_per_sec} must be positive")
 
     duration = wave.size / sample_rate
     expected = n_chars / chars_per_sec

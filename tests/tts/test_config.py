@@ -58,3 +58,21 @@ def test_config_is_frozen(tmp_path):
     cfg = load_config(_write(tmp_path, _MINIMAL))
     with pytest.raises(Exception):
         cfg.hf.repo_id = "other/repo"
+
+
+def test_negative_chars_per_sec_raises(tmp_path):
+    text = _MINIMAL + "text:\n  chars_per_sec: 0\n"
+    with pytest.raises(ConfigError, match="chars_per_sec"):
+        load_config(_write(tmp_path, text))
+
+
+def test_negative_chunk_target_seconds_raises(tmp_path):
+    text = _MINIMAL + "text:\n  chunk_target_seconds: 0\n"
+    with pytest.raises(ConfigError, match="chunk_target_seconds"):
+        load_config(_write(tmp_path, text))
+
+
+def test_negative_convs_per_shard_raises(tmp_path):
+    text = _MINIMAL + "run:\n  convs_per_shard: 0\n"
+    with pytest.raises(ConfigError, match="convs_per_shard"):
+        load_config(_write(tmp_path, text))
