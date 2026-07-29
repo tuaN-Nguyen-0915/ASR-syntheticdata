@@ -44,6 +44,7 @@ class FakeEngine:
         """Generate deterministic speech audio from text and random seed."""
         try:
             self._in_flight += 1
+            # Track peak concurrency: Task 12 tests that this respects its semaphore and backoff limits.
             self.peak_concurrency = max(self.peak_concurrency, self._in_flight)
             await asyncio.sleep(0)
             self.calls.append(Call(text, ref_latents, seed))
