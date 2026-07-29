@@ -4236,6 +4236,12 @@ explicit manual run against Modal.
 torch>=2.5
 nano-vllm-voxcpm>=0.1
 librosa>=0.10
+# datasets>=5 requires torchcodec to encode OR decode its Audio feature. It goes
+# here, not in requirements.txt: torch is already present for VoxCPM, so the
+# marginal cost is ~39 MB rather than the ~685 MB a local install would pull in.
+# This is what lets Task 16's smoke test verify a published shard through the
+# real consumer decode path.
+torchcodec>=0.15
 ```
 
 - [ ] **Step 2: Append the implementation to `meddies_tts/engine.py`**
