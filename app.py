@@ -35,6 +35,10 @@ image = (
     # kernels from source under --no-build-isolation, which needs nvcc and a C/C++
     # toolchain that debian_slim's minimal apt set does not provide.
     modal.Image.from_registry("nvidia/cuda:12.4.1-devel-ubuntu22.04", add_python="3.11")
+    # CUDA base images ship their own ENTRYPOINT, which can interfere with how
+    # Modal starts the container process. Clearing it is a known-safe pattern
+    # from a working production Modal setup on the same kind of CUDA devel base.
+    .entrypoint([])
     .apt_install("git", "ffmpeg")
     .pip_install_from_requirements("requirements.txt")
     .pip_install_from_requirements("requirements-gpu.txt")
@@ -76,6 +80,18 @@ def fetch_weights() -> str:
     secrets=[hf_secret],
     timeout=7200,
     max_containers=20,
+    # Precautionary bound, not a measured one: @modal.enter() below loads a 2B
+    # model AND runs 147 encode_reference calls before the container is ready,
+    # well beyond a default startup budget. The pilot should record actual boot
+    # time on real hardware so this can be tightened.
+    startup_timeout=20 * 60,
+    # Keeps a container warm between shards so consecutive shards reuse one
+    # already-loaded engine instead of reloading the 2B model and re-encoding
+    # all 147 references from scratch (~12 min/shard means a 15-min idle window
+    # comfortably covers the gap to the next shard). This is what makes the
+    # shard-as-unit-of-work amortization in @modal.enter() actually pay off
+    # across MULTIPLE shards on one container, not just within one.
+    scaledown_window=15 * 60,
 )
 class Synthesizer:
     @modal.enter()
@@ -115,6 +131,25 @@ class Synthesizer:
         }
         print(f"ready: engine={self.engine.version} refs={len(self.refs)} "
               f"sample_rate={self.engine.sample_rate}")
+
+    @modal.exit()
+    async def shutdown(self) -> None:
+        """Release the engine's GPU resources when the container is torn down.
+
+        engine.close() existed but was never called anywhere -- dead code that
+        left the underlying nano-vllm-voxcpm server process (and its GPU
+        memory) alive until the container itself was killed. Guarded on both
+        sides: getattr in case @modal.enter() failed before self.engine was
+        ever assigned, and the try/except because a teardown-path failure here
+        must never mask whatever error (if any) actually ended the container.
+        """
+        engine = getattr(self, "engine", None)
+        if engine is None:
+            return
+        try:
+            await engine.close()
+        except Exception as error:  # noqa: BLE001 - teardown must not raise
+            print(f"warning: engine.close() failed during shutdown: {error}")
 
     @modal.method()
     async def run_shard(self, shard_id: str, repo_path: str, expected_plan_hash: str) -> dict:

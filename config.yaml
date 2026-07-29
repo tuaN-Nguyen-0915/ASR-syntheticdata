@@ -16,6 +16,8 @@ engine:
   cfg_value: 2.0
   temperature: 1.0
   inference_timesteps: 10
+  gpu_memory_utilization: 0.94    # more KV-cache headroom for concurrent sequences;
+                                   # pilot should sweep this alongside concurrency
 
 text:
   chunk_target_seconds: 12.0    # VoxCPM degrades past ~13 s per generation

@@ -36,6 +36,10 @@ class EngineConfig:
     cfg_value: float = 2.0
     temperature: float = 1.0
     inference_timesteps: int = 10
+    # Fraction of GPU memory nano-vllm-voxcpm may claim for KV-cache blocks; more
+    # blocks means more concurrent sequences resident before the scheduler queues.
+    # vLLM's own default is 0.9; the pilot should sweep this alongside concurrency.
+    gpu_memory_utilization: float = 0.94
 
 
 @dataclass(frozen=True)

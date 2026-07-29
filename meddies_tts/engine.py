@@ -49,6 +49,7 @@ class VoxCPMEngine:
             inference_timesteps=cfg.inference_timesteps,
             max_num_batched_tokens=cfg.max_num_batched_tokens,
             max_num_seqs=cfg.max_num_seqs,
+            gpu_memory_utilization=cfg.gpu_memory_utilization,
             devices=devices or [0],
         )
         await server.wait_for_ready()
