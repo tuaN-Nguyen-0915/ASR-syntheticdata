@@ -15,6 +15,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
 VISEC="/Users/phananhtuannguyen/Desktop/Project/ASR-syntheticdata/data/ViSEC-processed/processed_audio_by_id"
+VIVOS="pilot/refs_vivos/processed_audio_by_id"
+# Which pool this run uses, read straight from the config so the script and the
+# container can never disagree about it.
+REFS_SOURCE="$(python3 -c "import yaml;print((yaml.safe_load(open('pilot/pilot.yaml')).get('refs') or {}).get('source','visec'))")"
 CONFIG="pilot/pilot.yaml"
 PLAN="pilot/shard_plan.parquet"
 
@@ -43,8 +47,13 @@ check_prereqs() {
   done
   green "  pilot artifacts present"
 
-  [ -d "$VISEC" ] || die "ViSEC reference audio not found at $VISEC"
-  green "  ViSEC references: $(ls "$VISEC"/*.wav 2>/dev/null | wc -l | tr -d ' ') wav files"
+  if [ "$REFS_SOURCE" = "vivos" ]; then
+    [ -d "$VIVOS" ] || die "VIVOS refs missing — run: python3 cli.py --config $CONFIG build-refs --dest pilot/refs_vivos"
+    green "  refs pool: vivos ($(ls "$VIVOS"/*.wav 2>/dev/null | wc -l | tr -d ' ') wav files)"
+  else
+    [ -d "$VISEC" ] || die "ViSEC reference audio not found at $VISEC"
+    green "  refs pool: visec ($(ls "$VISEC"/*.wav 2>/dev/null | wc -l | tr -d ' ') wav files)"
+  fi
 
   # This is the cheap gate that catches a bad token before any GPU is requested.
   python3 cli.py --config "$CONFIG" preflight || die "preflight failed — see message above"
@@ -55,7 +64,7 @@ do_setup() {
   check_prereqs
 
   step "Creating volumes (idempotent — 'already exists' is fine)"
-  for v in meddies-tts-plan visec-refs voxcpm2-weights; do
+  for v in meddies-tts-plan visec-refs vivos-refs voxcpm2-weights; do
     if modal volume create "$v" 2>/dev/null; then
       green "  created $v"
     else
@@ -70,12 +79,25 @@ do_setup() {
   modal volume put --force meddies-tts-plan "$CONFIG"             /config.yaml
   green "  plan volume ready"
 
-  step "Uploading 147 ViSEC reference wavs (~54 MB, one-time)"
-  if modal volume ls visec-refs /processed_audio_by_id >/dev/null 2>&1; then
-    green "  already uploaded — skipping"
+  # Each pool lives on its own Volume, both mounted by app.py, so switching back
+  # never re-uploads anything that is already there.
+  if [ "$REFS_SOURCE" = "vivos" ]; then
+    step "Uploading 65 VIVOS reference wavs (~22 MB, one-time)"
+    if modal volume ls vivos-refs /processed_audio_by_id >/dev/null 2>&1; then
+      green "  already uploaded — skipping"
+    else
+      modal volume create vivos-refs 2>/dev/null || true
+      modal volume put vivos-refs "$VIVOS" /processed_audio_by_id
+      green "  VIVOS references uploaded"
+    fi
   else
-    modal volume put visec-refs "$VISEC" /processed_audio_by_id
-    green "  references uploaded"
+    step "Uploading 147 ViSEC reference wavs (~54 MB, one-time)"
+    if modal volume ls visec-refs /processed_audio_by_id >/dev/null 2>&1; then
+      green "  already uploaded — skipping"
+    else
+      modal volume put visec-refs "$VISEC" /processed_audio_by_id
+      green "  references uploaded"
+    fi
   fi
 
   step "Building the image and fetching VoxCPM2 weights"
@@ -94,6 +116,7 @@ do_generate() {
 
   step "PAID RUN — 54 utterances, 1 shard, ~\$0.02 of A100 time"
   echo "  Target repo : npat1509/TestSynth  (public)"
+  echo "  Refs pool   : $REFS_SOURCE"
   echo "  Plan hash   : $(python3 -c "import json;print(json.load(open('pilot/shard_plan.hash'))['vietnamese'])")"
   echo
   # Confirmation must work without a TTY (this gets driven from tooling that has no

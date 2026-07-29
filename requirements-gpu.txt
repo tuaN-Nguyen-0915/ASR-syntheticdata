@@ -1,10 +1,10 @@
-# requirements-gpu.txt — installed only in the Modal image, never on the Mac
-torch>=2.5
+# requirements-gpu.txt — installed only in the Modal image, never on the Mac.
+#
+# NOTE: torch, torchaudio, torchcodec and flash-attn are deliberately NOT listed here.
+# app.py installs them as earlier, explicitly version-matched layers from the cu128
+# index. Listing them here lets pip resolve them from PyPI, which ships CUDA-13
+# builds that fail at load with "libcudart.so.13: cannot open shared object file".
+# (datasets 5.x only needs torchcodec>=0.6.0 — an earlier ">=0.15" here was wrong
+# and unsatisfiable from any CUDA-12 index.)
 nano-vllm-voxcpm>=0.1
 librosa>=0.10
-# datasets>=5 requires torchcodec to encode OR decode its Audio feature. It goes
-# here, not in requirements.txt: torch is already present for VoxCPM, so the
-# marginal cost is ~39 MB rather than the ~685 MB a local install would pull in.
-# This is what lets Task 16's smoke test verify a published shard through the
-# real consumer decode path.
-torchcodec>=0.15

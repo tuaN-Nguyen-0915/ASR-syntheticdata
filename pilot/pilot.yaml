@@ -4,6 +4,15 @@
 hf:
   repo_id: "npat1509/TestSynth"
   private: false
+refs:
+  # Switch pools by changing `source` and `dir` together. Both volumes are mounted
+  # in app.py, so flipping back to visec needs no re-upload.
+  #   visec: source: visec / dir: /refs/visec   (147 speakers, emotional, no transcripts)
+  #   vivos: source: vivos / dir: /refs/vivos   (65 speakers, read speech, transcripts)
+  source: "vivos"
+  dir: "/refs/vivos"
+  target_seconds: 10
+
 speaker:
   policy: per_conversation
   seed_salt: "pilot-v1"

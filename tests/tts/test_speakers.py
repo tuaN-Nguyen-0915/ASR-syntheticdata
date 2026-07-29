@@ -50,7 +50,7 @@ def test_load_pool_reads_every_speaker(tmp_path):
 
 
 def test_load_pool_parses_fields(tmp_path):
-    speaker = next(s for s in load_pool(_pool_csv(tmp_path)) if s.speaker_id == 79)
+    speaker = next(s for s in load_pool(_pool_csv(tmp_path)) if s.speaker_id == "79")
     assert speaker.emotions == "angry"
     assert speaker.unique_source_s == pytest.approx(1.3)
     assert speaker.duration_s == pytest.approx(12.1)
@@ -59,8 +59,8 @@ def test_load_pool_parses_fields(tmp_path):
 
 
 def test_load_pool_applies_allow_filter(tmp_path):
-    pool = load_pool(_pool_csv(tmp_path), allow={0, 1})
-    assert [s.speaker_id for s in pool] == [0, 1]
+    pool = load_pool(_pool_csv(tmp_path), allow={"0", "1"})
+    assert [s.speaker_id for s in pool] == ["0", "1"]
 
 
 def test_per_conversation_gives_same_speaker_for_every_turn(tmp_path):

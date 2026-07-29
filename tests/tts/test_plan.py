@@ -23,7 +23,7 @@ def _cfg(**run_kwargs):
 
 def _pool(n=6):
     return [
-        Speaker(i, f"/refs/speaker_{i:03d}.wav", "neutral", 100.0 + i, 12.0)
+        Speaker(str(i), f"/refs/speaker_{i:03d}.wav", "neutral", 100.0 + i, 12.0)
         for i in range(n)
     ]
 
@@ -50,7 +50,7 @@ def _manifest(n_convs=5, n_turns=2, text="Xin chào bác sĩ."):
 
 _IDENTITY = type("N", (), {"normalize": staticmethod(lambda t: t)})()
 # keyed by (config, speaker_id) - the dialect follows the speaker
-_NORMALIZERS = {("vietnamese", sid): _IDENTITY for sid in range(6)}
+_NORMALIZERS = {("vietnamese", sid): _IDENTITY for sid in map(str, range(6))}
 
 
 def test_shard_id_is_prefixed_and_zero_padded():
@@ -133,7 +133,7 @@ def test_speaker_metadata_columns_are_populated():
 
 def test_text_spoken_comes_from_the_normalizer():
     upper = type("N", (), {"normalize": staticmethod(str.upper)})()
-    shouty = {("vietnamese", sid): upper for sid in range(6)}
+    shouty = {("vietnamese", sid): upper for sid in map(str, range(6))}
     plan, _ = build_plan(_manifest(n_convs=1, n_turns=1), _cfg(), _pool(), shouty)
     row = plan.to_pylist()[0]
     assert row["text_raw"] == "Xin chào bác sĩ."
@@ -202,10 +202,10 @@ def test_plan_hash_changes_when_text_spoken_changes():
     upper = type("N", (), {"normalize": staticmethod(str.upper)})()
     lower = type("N", (), {"normalize": staticmethod(str.lower)})()
     plan_a, _ = build_plan(
-        _manifest(n_convs=4), cfg, _pool(), {("vietnamese", sid): upper for sid in range(6)}
+        _manifest(n_convs=4), cfg, _pool(), {("vietnamese", sid): upper for sid in map(str, range(6))}
     )
     plan_b, _ = build_plan(
-        _manifest(n_convs=4), cfg, _pool(), {("vietnamese", sid): lower for sid in range(6)}
+        _manifest(n_convs=4), cfg, _pool(), {("vietnamese", sid): lower for sid in map(str, range(6))}
     )
     assert compute_plan_hash(plan_a, cfg, "vietnamese") != compute_plan_hash(plan_b, cfg, "vietnamese")
 
@@ -270,7 +270,7 @@ def test_plan_hash_for_one_config_is_unaffected_by_other_configs_in_the_plan():
     combined = pa.concat_tables([manifest_vi, manifest_en])
 
     normalizers = dict(_NORMALIZERS)
-    normalizers.update({("english", sid): _IDENTITY for sid in range(6)})
+    normalizers.update({("english", sid): _IDENTITY for sid in map(str, range(6))})
 
     cfg_vi_only = _cfg(configs=("vietnamese",))
     cfg_both = _cfg(configs=("vietnamese", "english"))

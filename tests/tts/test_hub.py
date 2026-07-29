@@ -91,7 +91,8 @@ def _plan(entries):
             {
                 "config": config, "disease_slug": "d", "disease_name": "D",
                 "conv_id": "conv_0001", "turn": 1, "role": "user",
-                "text_raw": "x", "text_spoken": "x", "speaker_id": 0,
+                "text_raw": "x", "text_spoken": "x", "speaker_id": "0",
+                "speaker_source": "visec", "speaker_gender": "",
                 "speaker_emotions": "neutral", "speaker_unique_source_s": 1.0,
                 "shard_id": sid, "audio_path": f"{config}/d/{sid}/Turn1/user.flac",
             }

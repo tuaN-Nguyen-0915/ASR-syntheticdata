@@ -19,7 +19,10 @@ APP_NAME = "meddies-tts"
 MODEL_REPO = "openbmb/VoxCPM2"
 MODEL_DIR = "/weights/VoxCPM2"
 PLAN_DIR = "/plan"
-REFS_DIR = "/refs"
+# Both reference pools mount side by side and cfg.refs.dir selects one at
+# runtime. Mounting both costs nothing when unused and means switching pools
+# never requires re-uploading 50+ MB of WAVs to get back to where you were.
+REFS_ROOT = "/refs"
 # Modal needs the GPU tier at decoration time (see @app.cls below), before
 # config.yaml is even loaded -- that only happens inside @modal.enter(), on the
 # GPU container itself. So the allocation is sourced from the environment, not
@@ -117,7 +120,8 @@ image = (
 app = modal.App(APP_NAME)
 weights_vol = modal.Volume.from_name("voxcpm2-weights", create_if_missing=True)
 plan_vol = modal.Volume.from_name("meddies-tts-plan", create_if_missing=True)
-refs_vol = modal.Volume.from_name("visec-refs", create_if_missing=True)
+visec_vol = modal.Volume.from_name("visec-refs", create_if_missing=True)
+vivos_vol = modal.Volume.from_name("vivos-refs", create_if_missing=True)
 hf_secret = modal.Secret.from_name("huggingface")
 
 
@@ -143,7 +147,8 @@ def fetch_weights() -> str:
 @app.cls(
     image=image,
     gpu=_GPU,
-    volumes={"/weights": weights_vol, PLAN_DIR: plan_vol, REFS_DIR: refs_vol},
+    volumes={"/weights": weights_vol, PLAN_DIR: plan_vol,
+             f"{REFS_ROOT}/visec": visec_vol, f"{REFS_ROOT}/vivos": vivos_vol},
     secrets=[hf_secret],
     timeout=7200,
     max_containers=20,
@@ -198,7 +203,7 @@ class Synthesizer:
         self.engine = await VoxCPMEngine.create(MODEL_DIR, self.cfg.engine)
 
         # Encode all 147 references ONCE, not per utterance.
-        pool = load_pool(Path(f"{REFS_DIR}/processed_audio_by_id/metadata.csv"))
+        pool = load_pool(Path(self.cfg.refs.dir) / "processed_audio_by_id" / "metadata.csv")
         self.refs = {
             speaker.speaker_id: await self.engine.encode_reference(
                 Path(speaker.wav_path).read_bytes()
@@ -206,7 +211,7 @@ class Synthesizer:
             for speaker in pool
         }
         print(f"ready: engine={self.engine.version} refs={len(self.refs)} "
-              f"sample_rate={self.engine.sample_rate}")
+              f"source={self.cfg.refs.source} sample_rate={self.engine.sample_rate}")
 
     @modal.exit()
     async def shutdown(self) -> None:
@@ -288,6 +293,8 @@ class Synthesizer:
                 provenance = json.dumps({
                     "gpu": _GPU,
                     "seed_salt": self.cfg.speaker.seed_salt,
+                    "refs_source": self.cfg.refs.source,
+                    "refs_target_seconds": self.cfg.refs.target_seconds,
                     "speaker_policy": self.cfg.speaker.policy,
                     "text_chunk_target_seconds": self.cfg.text.chunk_target_seconds,
                     "text_chars_per_sec": self.cfg.text.chars_per_sec,

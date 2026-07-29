@@ -28,8 +28,10 @@ PLAN_SCHEMA = pa.schema(
         pa.field("role", pa.string()),
         pa.field("text_raw", pa.string()),
         pa.field("text_spoken", pa.string()),
-        pa.field("speaker_id", pa.int32()),
+        pa.field("speaker_id", pa.string()),
+        pa.field("speaker_source", pa.string()),
         pa.field("speaker_emotions", pa.string()),
+        pa.field("speaker_gender", pa.string()),
         pa.field("speaker_unique_source_s", pa.float32()),
         pa.field("shard_id", pa.string()),
         pa.field("audio_path", pa.string()),
@@ -58,7 +60,7 @@ def build_plan(
     manifest: pa.Table,
     cfg: Config,
     pool: list[Speaker],
-    normalizers: dict[tuple[str, int], object] | None = None,
+    normalizers: dict[tuple[str, str], object] | None = None,
 ) -> tuple[pa.Table, list[dict]]:
     """Normalize, reject, assign speakers and pack conversations into shards."""
     by_id = {speaker.speaker_id: speaker for speaker in pool}
@@ -66,7 +68,7 @@ def build_plan(
     # Normalizers are cached per (config, speaker_id), not per config, because
     # dialect is a property of the speaker (see the ordering note below).
     # A caller-supplied dict (test injection point) seeds/overrides this cache.
-    cache: dict[tuple[str, int], object] = dict(normalizers or {})
+    cache: dict[tuple[str, str], object] = dict(normalizers or {})
 
     kept: list[dict] = []
     rejects: list[dict] = []
@@ -123,7 +125,9 @@ def build_plan(
                 **row,
                 "text_spoken": spoken,
                 "speaker_id": speaker_id,
+                "speaker_source": cfg.refs.source,
                 "speaker_emotions": speaker.emotions,
+                "speaker_gender": speaker.gender,
                 "speaker_unique_source_s": speaker.unique_source_s,
                 "audio_path": path,
                 "shard_id": "",  # filled in by _assign_shards below

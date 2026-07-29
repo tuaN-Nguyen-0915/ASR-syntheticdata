@@ -22,33 +22,68 @@ def derive_seed(salt: str, *parts: object) -> int:
 
 @dataclass(frozen=True)
 class Speaker:
-    speaker_id: int
+    """One reference voice, corpus-agnostic.
+
+    speaker_id is a STRING so both pools keep their native identifiers: ViSEC's
+    are numeric ("0".."146"), VIVOS's are names ("VIVOSDEV01"). Mapping VIVOS to
+    integers would have made the published speaker_id a meaningless index and
+    pushed real provenance into a side column.
+
+    Fields a given corpus lacks are empty, never invented: ViSEC has no
+    transcripts and no gender labels; VIVOS has no emotion labels.
+    """
+
+    speaker_id: str
     wav_path: Path
     emotions: str
     unique_source_s: float
     duration_s: float
+    gender: str = ""
+    # Exact text of the reference audio. Only VIVOS supplies this; it is what
+    # enables VoxCPM2's transcript-assisted cloning, which the spec (line 105)
+    # recorded as unavailable with ViSEC.
+    transcript: str = ""
 
 
-def load_pool(metadata_csv: Path, allow: set[int] | None = None) -> list[Speaker]:
-    """Load ViSEC speakers; wav paths resolve relative to the CSV's parent's parent."""
+def load_pool(metadata_csv: Path, allow: set[str] | None = None) -> list[Speaker]:
+    """Load a reference pool from a metadata CSV; WAV paths resolve relative to its parent's parent.
+
+    Reads both the ViSEC CSV as it ships and the CSV build-refs writes for VIVOS.
+    The columns they share are required; the rest are optional, so the existing
+    ViSEC directory keeps working untouched -- which is what makes switching back
+    a config edit rather than a rebuild.
+    """
     csv_path = Path(metadata_csv)
     root = csv_path.parent.parent
     speakers: list[Speaker] = []
     with csv_path.open(encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):
-            speaker_id = int(row["speaker_id"])
+            speaker_id = str(row["speaker_id"])
             if allow is not None and speaker_id not in allow:
                 continue
             speakers.append(
                 Speaker(
                     speaker_id=speaker_id,
                     wav_path=root / row["output_path"],
-                    emotions=row["emotions"],
-                    unique_source_s=float(row["unique_source_duration_seconds"]),
+                    emotions=row.get("emotions", ""),
+                    # ViSEC reports how much unique source a reference represents
+                    # (some are short loops padded out); VIVOS retains whole
+                    # utterances, so its own duration is the honest value.
+                    unique_source_s=float(
+                        row.get("unique_source_duration_seconds")
+                        or row["duration_seconds"]
+                    ),
                     duration_s=float(row["duration_seconds"]),
+                    gender=row.get("gender", ""),
+                    transcript=row.get("transcript", ""),
                 )
             )
-    return sorted(speakers, key=lambda s: s.speaker_id)
+    # Numeric-aware sort so ViSEC ids order 0,1,2,...,10 rather than 0,1,10,2.
+    return sorted(
+        speakers,
+        key=lambda s: (0, int(s.speaker_id), "") if s.speaker_id.isdigit()
+        else (1, 0, s.speaker_id),
+    )
 
 
 class SpeakerAssigner(Protocol):

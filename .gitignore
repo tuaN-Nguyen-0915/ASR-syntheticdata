@@ -2,3 +2,6 @@ output*/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Materialized reference pools — rebuild with `cli.py build-refs`, don't commit 22 MB of WAVs.
+pilot/refs_*/

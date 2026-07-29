@@ -59,9 +59,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("plan", help="normalize, reject, assign speakers, pack shards")
     p.add_argument("--manifest", required=True)
-    p.add_argument("--visec", required=True, help="path to ViSEC metadata.csv")
+    p.add_argument("--visec", help="path to a reference metadata.csv "
+                   "(default: <refs.dir>/processed_audio_by_id/metadata.csv)")
     p.add_argument("--out", required=True)
     p.add_argument("--rejects", required=True)
+
+    p = sub.add_parser("build-refs", help="materialize a reference pool into load_pool layout")
+    p.add_argument("--dest", required=True, help="directory to write processed_audio_by_id/ into")
+    p.add_argument("--target-seconds", type=int, default=None,
+                   help="VIVOS duration variant (default: refs.target_seconds from config)")
 
     p = sub.add_parser("preflight", help="verify HF token, repo and write access")
 
@@ -92,10 +98,31 @@ def _cmd_build_manifest(args, cfg) -> int:
     return 0
 
 
+def _cmd_build_refs(args, cfg) -> int:
+    """Unpack a reference corpus into the on-disk layout load_pool reads.
+
+    ViSEC already ships in that layout and needs no conversion, so this only
+    has work to do for vivos; saying so plainly beats silently doing nothing.
+    """
+    from meddies_tts.refs import build_vivos_refs
+
+    if cfg.refs.source == "visec":
+        print("refs.source is 'visec', which already ships in the required layout — "
+              "point refs.dir at it directly; nothing to build.")
+        return 0
+    seconds = args.target_seconds or cfg.refs.target_seconds
+    count = build_vivos_refs(Path(args.dest), seconds)
+    print(f"wrote {count} VIVOS references ({seconds}s variant) to {args.dest}/processed_audio_by_id/")
+    return 0
+
+
 def _cmd_plan(args, cfg) -> int:
     """Normalize, reject, assign speakers and pack shards (Stage 1)."""
     manifest = read_manifest(Path(args.manifest))
-    pool = load_pool(Path(args.visec))
+    # --visec still works and still wins, so an existing command line keeps
+    # behaving exactly as before; without it the pool comes from refs.dir.
+    pool = load_pool(Path(args.visec) if args.visec
+                     else Path(cfg.refs.dir) / "processed_audio_by_id" / "metadata.csv")
     plan, rejects = build_plan(manifest, cfg, pool)
 
     write_plan(plan, Path(args.out))
@@ -212,6 +239,7 @@ def _cmd_materialize_tree(args, cfg) -> int:
 
 _COMMANDS = {
     "build-manifest": _cmd_build_manifest,
+    "build-refs": _cmd_build_refs,
     "plan": _cmd_plan,
     "preflight": _cmd_preflight,
     "estimate": _cmd_estimate,

@@ -28,6 +28,33 @@ class SpeakerConfig:
     seed_salt: str = "v1"
 
 
+# Reference pools are interchangeable because build-refs materializes every source
+# into the SAME on-disk layout (<dir>/processed_audio_by_id/{*.wav,metadata.csv}).
+# Switching pools is therefore a config edit, not a code path: nothing downstream
+# of load_pool knows or cares which corpus the WAVs came from.
+_REFS_SOURCES = ("visec", "vivos")
+
+
+@dataclass(frozen=True)
+class RefsConfig:
+    # Which corpus the references come from. Recorded on every published row as
+    # speaker_source, so a shard is never ambiguous about its provenance.
+    source: str = "visec"
+    # Mount point inside the Modal container. app.py mounts one Volume per source
+    # at a fixed path, so both pools can coexist and neither needs re-uploading
+    # when you switch back.
+    dir: str = "/refs/visec"
+    # VIVOS ships nested 5/10/15/20/30s variants per speaker; this picks one.
+    # Ignored by ViSEC, which has exactly one WAV per speaker.
+    target_seconds: int = 10
+
+    def __post_init__(self) -> None:
+        if self.source not in _REFS_SOURCES:
+            raise ConfigError(
+                f"refs.source must be one of {_REFS_SOURCES}, got {self.source!r}"
+            )
+
+
 @dataclass(frozen=True)
 class EngineConfig:
     concurrency: int = 48
@@ -72,6 +99,7 @@ class RunConfig:
 class Config:
     hf: HFConfig
     speaker: SpeakerConfig = SpeakerConfig()
+    refs: RefsConfig = RefsConfig()
     engine: EngineConfig = EngineConfig()
     text: TextConfig = TextConfig()
     run: RunConfig = RunConfig()
@@ -117,6 +145,7 @@ def load_config(path: Path, overrides: dict[str, Any] | None = None) -> Config:
     cfg = Config(
         hf=HFConfig(**hf_raw),
         speaker=SpeakerConfig(**_section(raw, "speaker")),
+        refs=RefsConfig(**_section(raw, "refs")),
         engine=EngineConfig(**_section(raw, "engine")),
         text=TextConfig(**_section(raw, "text")),
         run=RunConfig(**run_raw),

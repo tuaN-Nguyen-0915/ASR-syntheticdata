@@ -26,7 +26,9 @@ def _row(index=0, text="Xin chào bác sĩ. Tôi bị đau bụng."):
         "role": "user" if index % 2 == 0 else "assistant",
         "text_raw": text,
         "text_spoken": text,
-        "speaker_id": 0,
+        "speaker_id": "0",
+        "speaker_source": "visec",
+        "speaker_gender": "",
         "speaker_emotions": "neutral",
         "speaker_unique_source_s": 100.0,
         "shard_id": "vi-00000",
@@ -34,7 +36,7 @@ def _row(index=0, text="Xin chào bác sĩ. Tôi bị đau bụng."):
     }
 
 
-_REFS = {0: b"latents-0"}
+_REFS = {"0": b"latents-0"}
 
 
 async def test_produces_one_row_per_utterance():

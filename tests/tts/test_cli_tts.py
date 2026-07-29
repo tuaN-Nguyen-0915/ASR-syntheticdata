@@ -152,7 +152,8 @@ def test_materialize_tree_rebuilds_the_output_full_shape(workspace, tmp_path):
     row = {
         "config": "vietnamese", "disease_slug": "suy_gan", "disease_name": "Suy gan",
         "conv_id": "conv_0001", "turn": 1, "role": "user",
-        "text_raw": "x", "text_spoken": "x", "speaker_id": 0,
+        "text_raw": "x", "text_spoken": "x", "speaker_id": "0",
+        "speaker_source": "visec", "speaker_gender": "",
         "speaker_emotions": "neutral", "speaker_unique_source_s": 100.0,
         "shard_id": "vi-00000",
         "audio_path": "vietnamese/suy_gan/conv_0001/Turn1/user.flac",
@@ -175,7 +176,8 @@ def _shard_with_audio_path(workspace, name, audio_path):
     row = {
         "config": "vietnamese", "disease_slug": "suy_gan", "disease_name": "Suy gan",
         "conv_id": "conv_0001", "turn": 1, "role": "user",
-        "text_raw": "x", "text_spoken": "x", "speaker_id": 0,
+        "text_raw": "x", "text_spoken": "x", "speaker_id": "0",
+        "speaker_source": "visec", "speaker_gender": "",
         "speaker_emotions": "neutral", "speaker_unique_source_s": 100.0,
         "shard_id": "vi-00000",
         "audio_path": audio_path,
