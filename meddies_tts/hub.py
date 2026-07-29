@@ -62,7 +62,15 @@ def preflight(api, repo_id: str, private: bool = False) -> None:
             "would only fail after a shard had already been generated."
         ) from error
 
-    api.delete_file(path_in_repo=_PROBE_PATH, repo_id=repo_id, repo_type=_REPO_TYPE)
+    # Cleanup failing is not fatal — the upload above already proved write access —
+    # but it must not leak a raw exception past the HubError contract (callers in
+    # Tasks 14/16 catch HubError specifically), so failure is swallowed and surfaced
+    # as a visible warning instead of a stray, invisible probe file on the repo.
+    try:
+        api.delete_file(path_in_repo=_PROBE_PATH, repo_id=repo_id, repo_type=_REPO_TYPE)
+    except Exception as error:  # noqa: BLE001
+        print(f"warning: could not delete preflight probe {_PROBE_PATH!r} from {repo_id!r}: {error}")
+
     list_repo_paths(api, repo_id)
 
 
@@ -93,12 +101,33 @@ def remaining_targets(plan: pa.Table, existing: set[str]) -> list[tuple[str, str
     return [(sid, path) for sid, path in shard_targets(plan) if path not in existing]
 
 
+def _unreadable_message(repo_id: str, path_in_repo: str, error: Exception) -> str:
+    return (
+        f"could not read {path_in_repo!r} from {repo_id!r}: {error}. Drift status is "
+        "unknown, so the run refuses rather than silently proceeding."
+    )
+
+
 def read_text(api, repo_id: str, path_in_repo: str) -> str | None:
-    """Fetch a small text file from the repo, or None if it doesn't exist yet."""
+    """Fetch a small text file from the repo; None means confirmed absent, not "unknown"."""
+    # Imported lazily so callers that only need the pure planning helpers never pay
+    # for importing huggingface_hub.
+    from huggingface_hub.errors import EntryNotFoundError, HfHubHTTPError, RepositoryNotFoundError
+
     try:
         local = api.hf_hub_download(repo_id, path_in_repo, repo_type=_REPO_TYPE)
-    except Exception:  # noqa: BLE001 - absent file is the common, benign case
+    # A 404 is the only case that means "no published hash yet, first run" and may
+    # be treated as absent. Anything else (a network blip, a 5xx, ...) must NOT be
+    # folded into that same None, or a transient failure would silently disable
+    # drift detection and let a resumed run dispatch against a drifted plan.
+    except (EntryNotFoundError, RepositoryNotFoundError):
         return None
+    except HfHubHTTPError as error:
+        if getattr(error.response, "status_code", None) == 404:
+            return None
+        raise HubError(_unreadable_message(repo_id, path_in_repo, error)) from error
+    except Exception as error:  # noqa: BLE001 - not a confirmed absence, so don't guess
+        raise HubError(_unreadable_message(repo_id, path_in_repo, error)) from error
     return Path(local).read_text(encoding="utf-8").strip()
 
 
