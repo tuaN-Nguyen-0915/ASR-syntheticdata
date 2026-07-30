@@ -13,8 +13,8 @@ refs:
   # target_seconds must match the dir suffix -- it is what build-refs and the plan
   # hash use, so a mismatch would silently generate from the wrong variant.
   source: "vivos"
-  dir: "/refs/vivos/v30"    # v10 or v30 — one subdir per duration variant
-  target_seconds: 30
+  dir: "/refs/vivos/v20"    # v10 or v30 — one subdir per duration variant
+  target_seconds: 20
 
 speaker:
   policy: per_conversation
