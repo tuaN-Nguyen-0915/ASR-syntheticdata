@@ -213,7 +213,8 @@ def test_plan_hash_changes_when_text_spoken_changes():
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("chunk_target_seconds", 20.0),
+        ("chunk_max_chars", 200),
+        ("chunk_overflow_chars", 30),
         ("chars_per_sec", 7.0),
         ("silence_ms", 500),
     ],

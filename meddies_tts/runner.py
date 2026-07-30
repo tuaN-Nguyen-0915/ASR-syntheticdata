@@ -69,7 +69,10 @@ async def _synthesize_once(
     max_chunk_retries: int,
 ) -> tuple[np.ndarray, int, int]:
     """Chunk, synthesize, join, and resample one utterance attempt."""
-    chunks = chunk_text(row["text_spoken"], cfg.text.chunk_chars)
+    # Without chunk_overflow_chars here the tolerance is silently 0 and every
+    # near-fit sentence opens a new chunk -- exactly what it exists to prevent.
+    chunks = chunk_text(row["text_spoken"], cfg.text.chunk_chars,
+                        cfg.text.chunk_overflow_chars)
     seeds = [
         derive_seed(cfg.speaker.seed_salt, row["audio_path"], f"{salt_suffix}#{index}")
         for index in range(len(chunks))

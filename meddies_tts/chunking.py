@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import re
 
+# '!' and '?' are here as a safety net only: clean_punctuation maps them to '.'
+# before chunking ever runs, so in practice every boundary is a period. Keeping
+# them costs nothing and stops a bypassed preprocessing step from silently
+# producing one enormous "sentence".
 _SENTENCE = re.compile(r"[^.!?…]+[.!?…]+|[^.!?…]+")
 _CLAUSE = re.compile(r"[^,;:]+[,;:]+|[^,;:]+")
 
@@ -14,20 +18,29 @@ def split_sentences(text: str) -> list[str]:
 def split_clauses(text: str) -> list[str]:
     """Secondary split points: comma, semicolon, colon.
 
-    Measured: at a 13 s budget, 4.03% of sentences are too long. Splitting those at
-    clause punctuation first rescues 93.4% of them, so only 0.27% of all sentences
-    ever get cut mid-clause.
+    Only reached by sentences that bust the budget on their own. Measured on the
+    corpus at a 130-char budget: 15.6% of sentences are oversized, 92.2% of those
+    contain a comma, and only 4.6% have no clause boundary at all and need a
+    whitespace cut.
     """
     return [match.strip() for match in _CLAUSE.findall(text) if match.strip()]
 
 
-def _pack(pieces: list[str], max_chars: int) -> list[str]:
-    """Greedily join pieces without exceeding max_chars."""
+def _pack(pieces: list[str], max_chars: int, hard_cap: int) -> list[str]:
+    """Join pieces greedily, preferring to keep whole sentences intact.
+
+    Two thresholds, which is the point of this function. A piece is added while the
+    result stays within max_chars; if it would overshoot, it is STILL added when the
+    overshoot lands inside the tolerance (hard_cap), because starting a new chunk
+    over a handful of characters costs a join -- 250 ms of silence plus an
+    independent generation -- for no benefit. Past hard_cap the piece starts the
+    next chunk, keeping the sentence whole.
+    """
     chunks: list[str] = []
     current = ""
     for piece in pieces:
         candidate = f"{current} {piece}".strip() if current else piece
-        if current and len(candidate) > max_chars:
+        if current and len(candidate) > hard_cap:
             chunks.append(current)
             current = piece
         else:
@@ -37,31 +50,41 @@ def _pack(pieces: list[str], max_chars: int) -> list[str]:
     return chunks
 
 
-def _hard_split(sentence: str, max_chars: int) -> list[str]:
-    """Oversized sentence: try clause boundaries first, then whitespace."""
-    by_clause = _pack(split_clauses(sentence), max_chars)
-    if all(len(chunk) <= max_chars for chunk in by_clause):
+def _hard_split(sentence: str, max_chars: int, hard_cap: int) -> list[str]:
+    """One sentence too long to speak in a single generation: clause, then whitespace."""
+    by_clause = _pack(split_clauses(sentence), max_chars, hard_cap)
+    if all(len(chunk) <= hard_cap for chunk in by_clause):
         return by_clause
     chunks: list[str] = []
     for clause in by_clause:
-        if len(clause) <= max_chars:
+        if len(clause) <= hard_cap:
             chunks.append(clause)
         else:
-            chunks.extend(_pack(clause.split(), max_chars))
+            # Word boundaries are the floor: cutting mid-word would make the model
+            # pronounce fragments. A single word longer than hard_cap is emitted
+            # oversized rather than mangled.
+            chunks.extend(_pack(clause.split(), max_chars, hard_cap))
     return chunks
 
 
-def chunk_text(text: str, max_chars: int) -> list[str]:
-    """Pack sentences into chunks of at most max_chars, splitting long ones by clause.
+def chunk_text(text: str, max_chars: int, overflow_chars: int = 0) -> list[str]:
+    """Merge sentences into chunks of at most max_chars, tolerating a small overshoot.
 
-    Three tiers, most natural first: sentence boundary -> clause punctuation ->
-    whitespace. The budget is a duration target in disguise (TextConfig.chunk_chars),
-    because VoxCPM degrades past roughly 13 s per generation.
+    Whole sentences come first: a sentence that would push the chunk past the
+    tolerance starts the next one instead of being split. Only a sentence that is
+    itself over the tolerance gets broken, at clause punctuation and then at
+    whitespace.
+
+    max_chars is a fixed character budget, not a duration -- VoxCPM2 degrades past
+    roughly 13 s per generation and 130 chars sits comfortably under that for every
+    voice pool, where a seconds-derived budget would move with each pool's speech
+    rate (measured: 17.42 chars/s on ViSEC vs 15.56 on VIVOS).
     """
+    hard_cap = max_chars + max(0, overflow_chars)
     pieces: list[str] = []
     for sentence in split_sentences(text):
-        if len(sentence) > max_chars:
-            pieces.extend(_hard_split(sentence, max_chars))
+        if len(sentence) > hard_cap:
+            pieces.extend(_hard_split(sentence, max_chars, hard_cap))
         else:
             pieces.append(sentence)
-    return _pack(pieces, max_chars)
+    return _pack(pieces, max_chars, hard_cap)

@@ -20,7 +20,8 @@ engine:
                                    # pilot should sweep this alongside concurrency
 
 text:
-  chunk_target_seconds: 12.0    # VoxCPM degrades past ~13 s per generation
+  chunk_max_chars: 130          # fixed budget; ~8.4s at VIVOS's 15.56 chars/s
+  chunk_overflow_chars: 14      # absorb a sentence rather than open a chunk for <=14 chars
   chars_per_sec: 14.0           # calibrated by the pilot; budget = target x this
   silence_ms: 250
   max_chars: 3000

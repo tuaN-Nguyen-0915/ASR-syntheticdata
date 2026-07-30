@@ -227,7 +227,10 @@ def test_fix2_legitimate_medical_text_with_bold_and_parentheses_is_untouched():
     # of the Fix 2 rules.
     assert _VN.normalize(
         "**Lưu ý:** Cần đến bệnh viện để bác sĩ khám (đặc biệt nếu sốt cao)."
-    ) == "Lưu ý: Cần đến bệnh viện để bác sĩ khám (đặc biệt nếu sốt cao)."
+        # ":" now becomes "." — clean_punctuation maps boundary marks to periods
+        # instead of deleting them, so the chunker keeps the split point. Parentheses
+        # are left alone, which is what this test is actually guarding.
+    ) == "Lưu ý. Cần đến bệnh viện để bác sĩ khám (đặc biệt nếu sốt cao)."
 
 
 # --- units and identifiers ---------------------------------------------------
@@ -246,7 +249,8 @@ def test_word_per_period_slash():
 
 def test_non_period_slash_becomes_a_space_not_moi():
     # 'anh/chị' occurs 9,760 times; 'anh mỗi chị' would be nonsense.
-    assert _VN.normalize("Anh/chị ở quận/huyện nào?") == "Anh chị ở quận huyện nào?"
+    # "?" is mapped to "." by clean_punctuation; the slash rule is what this tests.
+    assert _VN.normalize("Anh/chị ở quận/huyện nào?") == "Anh chị ở quận huyện nào."
 
 
 @pytest.mark.parametrize("ident", ["B12", "T4", "HbA1c", "N95", "SpO2", "COVID-19"])

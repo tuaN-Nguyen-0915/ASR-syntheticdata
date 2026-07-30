@@ -1,5 +1,5 @@
 ✓ Initialized. View run at 
-https://modal.com/apps/tuan-phannguyen1509/main/ap-kGhzq4UJe7Rn9fk8bPRCN9
+https://modal.com/apps/tuan-phannguyen1509/main/ap-8CrHmNTKb2eaeyj1bLvGmR
 ✓ Created objects.
 ├── 🔨 Created mount 
 │   /Users/phananhtuannguyen/Desktop/Project/ASR-syntheticdata/.claude/worktrees
@@ -14,274 +14,77 @@ dispatching 1 shard(s) to A100-40GB
   warnings.warn(
 /usr/local/lib/python3.11/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
   WeightNorm.apply(module, name, dim)
-ready: engine=nanovllm-voxcpm/2.0.3 refs=147 sample_rate=48000
-W0729 15:01:43.036000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] torch._dynamo hit config.recompile_limit (8)
-W0729 15:01:43.036000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8]    function: 'snake' (/usr/local/lib/python3.11/site-packages/nanovllm_voxcpm/layers/audio_vae_v2.py:48)
-W0729 15:01:43.036000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8]    last reason: 1/7: tensor 'x' size mismatch at index 1. expected 1024, actual 512
-W0729 15:01:43.036000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
-W0729 15:01:43.036000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+ready: engine=nanovllm-voxcpm/2.0.3 refs=65 source=vivos sample_rate=48000
+W0729 15:48:43.852000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] torch._dynamo hit config.recompile_limit (8)
+W0729 15:48:43.852000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8]    function: 'snake' (/usr/local/lib/python3.11/site-packages/nanovllm_voxcpm/layers/audio_vae_v2.py:48)
+W0729 15:48:43.852000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8]    last reason: 1/7: tensor 'x' size mismatch at index 1. expected 1024, actual 512
+W0729 15:48:43.852000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W0729 15:48:43.852000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
 
 [1AProcessing Files (0 / 0)      : |          |  0.00B /  0.00B            
 
+[1A
 [1ANew Data Upload               : |          |  0.00B /  0.00B            [A
 
 
-[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 27.7MB            [A[A
+[1A
+[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 29.1MB            [A[A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :   0%|          | 12.2kB / 27.7MB, 1.20kB/s  
+[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 29.1MB            [A[A
+[1AProcessing Files (0 / 1)      :   0%|          | 12.2kB / 29.1MB,   ???B/s  
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :   2%|▏         |  537kB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :   2%|▏         |  537kB / 27.7MB, 52.7kB/s  
+[1A  /tmp/vi-00000.parquet       :  20%|█▉        | 5.79MB / 29.1MB            [A[A
+[1AProcessing Files (0 / 1)      :  20%|█▉        | 5.79MB / 29.1MB,   ???B/s  
 
-[1ANew Data Upload               :   2%|▏         |  525kB / 27.6MB, 51.5kB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :   2%|▏         |  537kB / 27.7MB            [A[A
+[1A
+[1ANew Data Upload               :  20%|█▉        | 5.78MB / 29.0MB,   ???B/s  [A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :   2%|▏         |  537kB / 27.7MB            [A[A
+[1A  /tmp/vi-00000.parquet       :  99%|█████████▉| 28.9MB / 29.1MB            [A[A
+[1AProcessing Files (0 / 1)      :  99%|█████████▉| 28.9MB / 29.1MB, 2.86MB/s  
 
-
-[1A  /tmp/vi-00000.parquet       :   2%|▏         |  537kB / 27.7MB            [A[A
+[1A
+[1ANew Data Upload               :  99%|█████████▉| 28.9MB / 29.0MB, 2.86MB/s  [A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :   6%|▌         | 1.59MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :   6%|▌         | 1.59MB / 27.7MB,  153kB/s  
-
-[1ANew Data Upload               :   6%|▌         | 1.57MB / 27.6MB,  151kB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :  10%|▉         | 2.64MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  10%|▉         | 2.64MB / 27.7MB,  253kB/s  
-
-[1A
-[1ANew Data Upload               :   9%|▉         | 2.62MB / 27.6MB,  252kB/s  [A
+[1A  /tmp/vi-00000.parquet       :  99%|█████████▉| 28.9MB / 29.1MB            [A[A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :  17%|█▋        | 4.74MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  17%|█▋        | 4.74MB / 27.7MB,  453kB/s  
-
-[1ANew Data Upload               :  17%|█▋        | 4.72MB / 27.6MB,  452kB/s  [A
+[1A  /tmp/vi-00000.parquet       :  99%|█████████▉| 28.9MB / 29.1MB            [A[A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :  17%|█▋        | 4.74MB / 27.7MB            [A[A
-
-
-[1A  /tmp/vi-00000.parquet       :  17%|█▋        | 4.74MB / 27.7MB            [A[A
-
-
-[1A  /tmp/vi-00000.parquet       :  25%|██▍       | 6.84MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  25%|██▍       | 6.84MB / 27.7MB,  641kB/s  
-
-[1ANew Data Upload               :  25%|██▍       | 6.82MB / 27.6MB,  639kB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :  25%|██▍       | 6.84MB / 27.7MB            [A[A
+[1A  /tmp/vi-00000.parquet       :  99%|█████████▉| 28.9MB / 29.1MB            [A[A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :  32%|███▏      | 8.94MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  32%|███▏      | 8.94MB / 27.7MB,  828kB/s  
-
-[1ANew Data Upload               :  32%|███▏      | 8.92MB / 27.6MB,  827kB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :  32%|███▏      | 8.94MB / 27.7MB            [A[A
-
-
-[1A  /tmp/vi-00000.parquet       :  32%|███▏      | 8.94MB / 27.7MB            [A[A
+[1A  /tmp/vi-00000.parquet       :  99%|█████████▉| 28.9MB / 29.1MB            [A[A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :  38%|███▊      | 10.5MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  38%|███▊      | 10.5MB / 27.7MB,  953kB/s  
+[1A  /tmp/vi-00000.parquet       : 100%|██████████| 29.1MB / 29.1MB            [A[A
+[1AProcessing Files (1 / 1)      : 100%|██████████| 29.1MB / 29.1MB, 2.73MB/s  
 
-[1ANew Data Upload               :  38%|███▊      | 10.5MB / 27.6MB,  952kB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :  38%|███▊      | 10.5MB / 27.7MB            [A[A
+[1A
+[1ANew Data Upload               : 100%|██████████| 29.0MB / 29.0MB, 2.73MB/s  [A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :  38%|███▊      | 10.5MB / 27.7MB            [A[A
+[1A  /tmp/vi-00000.parquet       : 100%|██████████| 29.1MB / 29.1MB            [A[A
+[1AProcessing Files (1 / 1)      : 100%|██████████| 29.1MB / 29.1MB, 2.72MB/s  
 
+[1ANew Data Upload               : 100%|██████████| 29.0MB / 29.0MB, 2.72MB/s  
 
-[1A
-[1A  /tmp/vi-00000.parquet       :  46%|████▌     | 12.6MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  46%|████▌     | 12.6MB / 27.7MB, 1.12MB/s  
-
-[1A
-[1ANew Data Upload               :  46%|████▌     | 12.6MB / 27.6MB, 1.12MB/s  [A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  46%|████▌     | 12.6MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  53%|█████▎    | 14.7MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  53%|█████▎    | 14.7MB / 27.7MB, 1.30MB/s  
-
-[1A
-[1ANew Data Upload               :  53%|█████▎    | 14.7MB / 27.6MB, 1.30MB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :  53%|█████▎    | 14.7MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  59%|█████▉    | 16.3MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  59%|█████▉    | 16.3MB / 27.7MB, 1.42MB/s  
-
-[1A
-[1ANew Data Upload               :  59%|█████▉    | 16.3MB / 27.6MB, 1.42MB/s  [A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  59%|█████▉    | 16.3MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  61%|██████    | 16.8MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  61%|██████    | 16.8MB / 27.7MB, 1.44MB/s  
-
-[1A
-[1ANew Data Upload               :  61%|██████    | 16.8MB / 27.6MB, 1.44MB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :  65%|██████▍   | 17.9MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  65%|██████▍   | 17.9MB / 27.7MB, 1.52MB/s  
-
-[1A
-[1ANew Data Upload               :  65%|██████▍   | 17.8MB / 27.6MB, 1.52MB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :  65%|██████▍   | 17.9MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  72%|███████▏  | 20.0MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  72%|███████▏  | 20.0MB / 27.7MB, 1.69MB/s  
-
-[1A
-[1ANew Data Upload               :  72%|███████▏  | 19.9MB / 27.6MB, 1.69MB/s  [A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  72%|███████▏  | 20.0MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  72%|███████▏  | 20.0MB / 27.7MB            [A[A
-
-
-[1A  /tmp/vi-00000.parquet       :  80%|███████▉  | 22.1MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  80%|███████▉  | 22.1MB / 27.7MB, 1.83MB/s  
-
-[1A
-[1ANew Data Upload               :  80%|███████▉  | 22.0MB / 27.6MB, 1.83MB/s  [A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  80%|███████▉  | 22.1MB / 27.7MB            [A[A
-
-
-[1A  /tmp/vi-00000.parquet       :  87%|████████▋ | 24.2MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  87%|████████▋ | 24.2MB / 27.7MB, 1.99MB/s  
-
-[1A
-[1ANew Data Upload               :  87%|████████▋ | 24.1MB / 27.6MB, 1.99MB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :  87%|████████▋ | 24.2MB / 27.7MB            [A[A
-
-
-[1A  /tmp/vi-00000.parquet       :  87%|████████▋ | 24.2MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  95%|█████████▍| 26.3MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  95%|█████████▍| 26.3MB / 27.7MB, 2.12MB/s  
-
-[1A
-[1ANew Data Upload               :  95%|█████████▍| 26.2MB / 27.6MB, 2.12MB/s  [A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  95%|█████████▍| 26.3MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 27.3MB / 27.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  99%|█████████▊| 27.3MB / 27.7MB, 2.18MB/s  
-
-[1A
-[1ANew Data Upload               :  99%|█████████▊| 27.3MB / 27.6MB, 2.18MB/s  [A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 27.3MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 27.3MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 27.3MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 27.3MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 27.3MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 27.7MB / 27.7MB            [A[A
-[1AProcessing Files (1 / 1)      : 100%|██████████| 27.7MB / 27.7MB, 2.09MB/s  
-
-[1A
-[1ANew Data Upload               : 100%|██████████| 27.6MB / 27.6MB, 2.09MB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 27.7MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 27.7MB / 27.7MB            [A[A
-
-
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 27.7MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 27.7MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 27.7MB / 27.7MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 27.7MB / 27.7MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 27.7MB / 27.7MB, 2.00MB/s  
-
-[1ANew Data Upload               : 100%|██████████| 27.6MB / 27.6MB, 2.00MB/s  
-
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 27.7MB / 27.7MB            
-an error occurred during closing of asynchronous generator <async_generator object Synchronizer._run_generator_async at 0x110e46510>
-asyncgen: <async_generator object Synchronizer._run_generator_async at 0x110e46510>
+[1A  /tmp/vi-00000.parquet       : 100%|██████████| 29.1MB / 29.1MB            
+an error occurred during closing of asynchronous generator <async_generator object async_merge at 0x11b31e5a0>
+asyncgen: <async_generator object async_merge at 0x11b31e5a0>
 Traceback (most recent call last):
   File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/modal/_utils/async_utils.py", line 839, in __iter__
     yield from run_async_gen(runner, self._async_iterable)
@@ -290,8 +93,8 @@ GeneratorExit
 During handling of the above exception, another exception occurred:
 
 RuntimeError: aclose(): asynchronous generator is already running
-an error occurred during closing of asynchronous generator <async_generator object async_merge at 0x110cd69f0>
-asyncgen: <async_generator object async_merge at 0x110cd69f0>
+an error occurred during closing of asynchronous generator <async_generator object Synchronizer._run_generator_async at 0x11b34e3e0>
+asyncgen: <async_generator object Synchronizer._run_generator_async at 0x11b34e3e0>
 Traceback (most recent call last):
   File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/modal/_utils/async_utils.py", line 839, in __iter__
     yield from run_async_gen(runner, self._async_iterable)
@@ -301,10 +104,10 @@ During handling of the above exception, another exception occurred:
 
 RuntimeError: aclose(): asynchronous generator is already running
 Task was destroyed but it is pending!
-task: <Task pending name='Task-1459' coro=<<async_generator_athrow without __name__>()> wait_for=<Future finished result=None>>
-{"shard_id": "vi-00000", "status": "ok", "utterances": 54, "failed": 0, "audio_seconds": 1477.5199999999998, "wall_seconds": 204.49139261245728, "rtf": 0.13840177636340442, "failures": []}
-done: 0.41 h of audio generated | 1 shard(s): ok=1
+task: <Task pending name='Task-1329' coro=<<async_generator_athrow without __name__>()> wait_for=<Future finished result=None>>
+{"shard_id": "vi-00000", "status": "ok", "utterances": 54, "failed": 0, "audio_seconds": 1653.1999999999996, "wall_seconds": 194.17349672317505, "rtf": 0.11745311923734279, "failures": []}
+done: 0.46 h of audio generated | 1 shard(s): ok=1
 Stopping app - local entrypoint completed.
-[modal-client] 2026-07-29T22:05:04+0700 Timed out waiting for final app logs.
+Runner terminated.
 ✓ App completed. View run at 
-https://modal.com/apps/tuan-phannguyen1509/main/ap-kGhzq4UJe7Rn9fk8bPRCN9
+https://modal.com/apps/tuan-phannguyen1509/main/ap-8CrHmNTKb2eaeyj1bLvGmR

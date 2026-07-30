@@ -24,7 +24,8 @@ engine:
   temperature: 1.0
   inference_timesteps: 24
 text:
-  chunk_target_seconds: 12.0
+  chunk_max_chars: 130
+  chunk_overflow_chars: 14
   chars_per_sec: 14.0      # UNMEASURED assumption — the pilot replaces this
 run:
   gpu: "A100-40GB"

@@ -6,13 +6,14 @@ from meddies_tts.runner import run_shard
 from tests.tts.fakes import FakeEngine
 
 
-def _cfg(concurrency=8, chunk_seconds=12.0):
+def _cfg(concurrency=8, chunk_chars=120):
     # chunk_chars is a derived property (Task 1), so size it via the duration target:
-    # chunk_chars == int(chunk_seconds * chars_per_sec).
+    # chunk_chars is now a fixed character budget, not seconds x rate.
     return Config(
         hf=HFConfig(repo_id="Meddies/SynthAudio"),
         engine=EngineConfig(concurrency=concurrency, max_num_seqs=concurrency),
-        text=TextConfig(chunk_target_seconds=chunk_seconds, chars_per_sec=10.0),
+        text=TextConfig(chunk_max_chars=chunk_chars, chunk_overflow_chars=0,
+                        chars_per_sec=10.0),
     )
 
 
@@ -83,7 +84,7 @@ async def test_never_exceeds_the_configured_concurrency():
 async def test_long_text_is_chunked_and_n_chunks_recorded():
     text = " ".join(f"Đây là câu số {i}." for i in range(60))
     rows, _ = await run_shard("vi-00000", [_row(0, text)], FakeEngine(), _REFS,
-                              _cfg(chunk_seconds=12.0))   # 120-char budget
+                              _cfg(chunk_chars=120))   # 120-char budget
     assert rows[0]["n_chunks"] > 1
 
 

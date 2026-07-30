@@ -22,7 +22,8 @@ def test_loads_repo_id_and_applies_defaults(tmp_path):
     assert cfg.speaker.seed_salt == "v1"
     assert cfg.engine.concurrency == 48
     assert cfg.text.max_chars == 3000
-    assert cfg.text.chunk_chars == 168  # 12.0 s x 14.0 chars/sec
+    assert cfg.text.chunk_chars == 130       # fixed budget, not seconds x rate
+    assert cfg.text.chunk_hard_cap == 144   # + chunk_overflow_chars
     assert cfg.run.convs_per_shard == 122
     assert cfg.run.configs == ("vietnamese",)
 
@@ -66,9 +67,9 @@ def test_negative_chars_per_sec_raises(tmp_path):
         load_config(_write(tmp_path, text))
 
 
-def test_negative_chunk_target_seconds_raises(tmp_path):
-    text = _MINIMAL + "text:\n  chunk_target_seconds: 0\n"
-    with pytest.raises(ConfigError, match="chunk_target_seconds"):
+def test_non_positive_chunk_max_chars_raises(tmp_path):
+    text = _MINIMAL + "text:\n  chunk_max_chars: 0\n"
+    with pytest.raises(ConfigError, match="chunk_max_chars"):
         load_config(_write(tmp_path, text))
 
 

@@ -163,6 +163,38 @@ def strip_markup(text: str) -> str:
     return _WHITESPACE.sub(" ", without).strip()
 
 
+# Punctuation VoxCPM2 has no natural reading for. Mapped rather than deleted where
+# the mark carries a boundary the chunker needs (see clean_punctuation).
+_TO_PERIOD = re.compile(r"\s*[!?…]+\s*")
+_COLON_TO_PERIOD = re.compile(r"\s*:\s*")
+_DASH_TO_COMMA = re.compile(r"\s+[-\u2013\u2014]+\s+")
+_DROP = re.compile(r"[\"\u201c\u201d\u2018\u2019<>*#`|\[\]{}]")
+_MULTI_PERIOD = re.compile(r"\.\s*(?:\.\s*)+")
+_SPACE_BEFORE_PUNCT = re.compile(r"\s+([.,;])")
+
+
+def clean_punctuation(text: str) -> str:
+    """Reduce punctuation to what the model reads well: '.' and ',' only.
+
+    MUST run after number verbalization. "6-8 tiếng" and "39.5°C" depend on the
+    hyphen and the decimal point still being there; by this point they have already
+    become "sáu đến tám tiếng" and "ba mươi chín phẩy năm độ C".
+
+    '!' '?' and ':' become '.' rather than being deleted, because each marks a real
+    boundary the chunker splits on. Deleting ':' would cost split points for the
+    3.1% of oversized sentences where it is the ONLY clause boundary. An unspaced
+    hyphen is left alone -- those are compound words, not punctuation.
+    """
+    out = _TO_PERIOD.sub(". ", text)
+    out = _COLON_TO_PERIOD.sub(". ", out)
+    out = _DASH_TO_COMMA.sub(", ", out)
+    out = _DROP.sub("", out)
+    # Collapse runs left behind by the substitutions above ("? ." -> ". .").
+    out = _MULTI_PERIOD.sub(". ", out)
+    out = _SPACE_BEFORE_PUNCT.sub(r"\1", out)
+    return re.sub(r"\s+", " ", out).strip()
+
+
 class Normalizer(Protocol):
     def normalize(self, text: str) -> str:
         """Convert raw corpus text into exactly what the TTS model should speak."""
@@ -303,7 +335,11 @@ class VietnameseNormalizer:
     def normalize(self, text: str) -> str:
         """Turn raw Vietnamese corpus text into what the TTS model should speak."""
         stripped = strip_markup(text)
-        return _normalize_numbers(stripped, self._dialect) if stripped else ""
+        if not stripped:
+            return ""
+        # Punctuation cleanup goes LAST: number verbalization above still
+        # needs hyphens (ranges) and decimal points intact.
+        return clean_punctuation(_normalize_numbers(stripped, self._dialect))
 
 
 class EnglishNormalizer:

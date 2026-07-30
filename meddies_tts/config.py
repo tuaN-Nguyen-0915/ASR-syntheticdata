@@ -74,7 +74,16 @@ class TextConfig:
     # VoxCPM quality degrades noticeably past ~13 s of audio per generation, so the
     # chunk budget is expressed in SECONDS and converted using the calibrated speech
     # rate. The pilot (Task 17) measures chars_per_sec and both values are updated.
-    chunk_target_seconds: float = 12.0
+    # Fixed character budget for chunking. Deliberately NOT derived from seconds:
+    # a seconds-based budget moves with each pool's speech rate (measured 17.42
+    # chars/s on ViSEC vs 15.56 on VIVOS), so the same config would chunk
+    # differently per pool. 130 sits under the ~13 s degradation point for both.
+    chunk_max_chars: int = 130
+    # Overshoot tolerated to keep a sentence whole rather than opening a new chunk
+    # for a few characters. Effective hard cap is chunk_max_chars + this.
+    chunk_overflow_chars: int = 14
+    # Still used by QC to predict expected duration from character count; no longer
+    # feeds the chunk budget.
     chars_per_sec: float = 14.0
     silence_ms: int = 250
     max_chars: int = 3000
@@ -83,8 +92,13 @@ class TextConfig:
 
     @property
     def chunk_chars(self) -> int:
-        """Character budget per chunk, computed from chunk_target_seconds and chars_per_sec."""
-        return max(1, int(self.chunk_target_seconds * self.chars_per_sec))
+        """Character budget per chunk. Kept as the name callers already use."""
+        return max(1, self.chunk_max_chars)
+
+    @property
+    def chunk_hard_cap(self) -> int:
+        """Budget plus the tolerated overshoot -- the length a chunk may never exceed."""
+        return self.chunk_chars + max(0, self.chunk_overflow_chars)
 
 
 @dataclass(frozen=True)
@@ -169,9 +183,13 @@ def _validate(cfg: Config) -> None:
         raise ConfigError(
             f"text.chars_per_sec must be positive, got {cfg.text.chars_per_sec}"
         )
-    if cfg.text.chunk_target_seconds <= 0:
+    if cfg.text.chunk_max_chars <= 0:
         raise ConfigError(
-            f"text.chunk_target_seconds must be positive, got {cfg.text.chunk_target_seconds}"
+            f"text.chunk_max_chars must be positive, got {cfg.text.chunk_max_chars}"
+        )
+    if cfg.text.chunk_overflow_chars < 0:
+        raise ConfigError(
+            f"text.chunk_overflow_chars cannot be negative, got {cfg.text.chunk_overflow_chars}"
         )
     if cfg.run.convs_per_shard <= 0:
         raise ConfigError(

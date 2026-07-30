@@ -84,9 +84,68 @@ def test_falls_back_to_whitespace_when_a_clause_is_still_too_long():
     assert all(len(c) <= 60 for c in chunks)
 
 
-def test_budget_matches_the_duration_target():
+def test_default_budget_is_a_fixed_character_count():
     from meddies_tts.config import TextConfig
 
     # 12 s at 14 chars/sec
-    assert TextConfig().chunk_chars == 168
-    assert TextConfig(chunk_target_seconds=13.0, chars_per_sec=20.0).chunk_chars == 260
+    assert TextConfig().chunk_chars == 130
+    assert TextConfig(chunk_max_chars=260).chunk_chars == 260
+    # The hard cap is the budget plus the tolerated overshoot.
+    assert TextConfig(chunk_max_chars=130, chunk_overflow_chars=14).chunk_hard_cap == 144
+
+
+# ---------------------------------------------------------------- overflow tolerance
+def test_sentence_within_tolerance_is_absorbed_not_split_off():
+    """A sentence that overshoots by <= overflow_chars joins the current chunk.
+
+    Opening a new chunk costs a join: 250 ms of inserted silence plus an
+    independent generation with its own seed. Not worth paying for 9 characters.
+    """
+    # 124 + space + 18 = 143, inside the 144 hard cap -> one chunk
+    chunks = chunk_text("a" * 123 + ". " + "b" * 17 + ".", 130, 14)
+    assert len(chunks) == 1
+    assert len(chunks[0]) == 143
+
+
+def test_sentence_past_the_tolerance_starts_a_new_chunk():
+    """Past the hard cap the sentence must stay whole and begin the next chunk."""
+    chunks = chunk_text("a" * 123 + ". " + "b" * 40 + ".", 130, 14)
+    assert len(chunks) == 2
+    assert chunks[0] == "a" * 123 + "."
+    assert chunks[1] == "b" * 40 + "."
+
+
+def test_zero_tolerance_reproduces_a_strict_budget():
+    """overflow_chars=0 must behave exactly like a hard limit."""
+    chunks = chunk_text("a" * 100 + ". " + "b" * 40 + ".", 130, 0)
+    assert len(chunks) == 2
+
+
+def test_tolerance_default_is_zero_so_callers_must_opt_in():
+    """A caller that forgets to pass the tolerance gets the strict budget, not a surprise."""
+    strict = chunk_text("a" * 123 + ". " + "b" * 17 + ".", 130)
+    assert len(strict) == 2
+
+
+def test_whole_sentences_are_preferred_over_filling_the_budget():
+    """Three short sentences pack together; the fourth would bust the cap."""
+    s = "Em chào bác sĩ."          # 15
+    chunks = chunk_text(" ".join([s] * 12), 130, 14)
+    # every chunk ends at a sentence boundary, none exceeds the hard cap
+    assert all(c.endswith(".") for c in chunks)
+    assert all(len(c) <= 144 for c in chunks)
+
+
+def test_oversized_sentence_still_falls_back_to_clause_then_whitespace():
+    """The tolerance must not swallow the tier-2/tier-3 fallback."""
+    long_sentence = ", ".join(["phần " + "z" * 30] * 6) + "."
+    assert len(long_sentence) > 144
+    chunks = chunk_text(long_sentence, 130, 14)
+    assert len(chunks) > 1
+    assert all(len(c) <= 144 for c in chunks)
+
+
+def test_a_single_word_longer_than_the_cap_is_emitted_not_mangled():
+    """Cutting mid-word would make the model pronounce fragments."""
+    word = "w" * 200
+    assert chunk_text(word + ".", 130, 14) == [word + "."]

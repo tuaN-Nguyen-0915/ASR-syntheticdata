@@ -183,7 +183,7 @@ def compute_plan_hash(plan: pa.Table, cfg: Config, config: str) -> str:
 
     Includes a digest of the full text_spoken column (hashed, not embedded raw,
     to keep the payload cheap) plus every text.*/engine.* field the Task 17 pilot
-    sweeps and that changes what the audio sounds like: chunk_target_seconds,
+    sweeps and that changes what the audio sounds like: chunk_max_chars,
     chars_per_sec, silence_ms, cfg_value, temperature, inference_timesteps.
     Hashing text_spoken directly makes a hand-maintained NORMALIZER_VERSION
     constant redundant -- any normalizer change that alters output text already
@@ -207,7 +207,8 @@ def compute_plan_hash(plan: pa.Table, cfg: Config, config: str) -> str:
         "speaker_pool": cfg.speaker.pool,
         "seed_salt": cfg.speaker.seed_salt,
         "convs_per_shard": cfg.run.convs_per_shard,
-        "text_chunk_target_seconds": cfg.text.chunk_target_seconds,
+        "text_chunk_max_chars": cfg.text.chunk_max_chars,
+        "text_chunk_overflow_chars": cfg.text.chunk_overflow_chars,
         "text_chars_per_sec": cfg.text.chars_per_sec,
         "text_silence_ms": cfg.text.silence_ms,
         "engine_cfg_value": cfg.engine.cfg_value,
