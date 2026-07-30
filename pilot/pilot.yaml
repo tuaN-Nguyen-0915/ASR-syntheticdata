@@ -5,13 +5,16 @@ hf:
   repo_id: "npat1509/TestSynth"
   private: false
 refs:
-  # Switch pools by changing `source` and `dir` together. Both volumes are mounted
-  # in app.py, so flipping back to visec needs no re-upload.
-  #   visec: source: visec / dir: /refs/visec   (147 speakers, emotional, no transcripts)
-  #   vivos: source: vivos / dir: /refs/vivos   (65 speakers, read speech, transcripts)
+  # Switch by editing source + dir together. app.py mounts both Volumes and every
+  # variant stays uploaded, so flipping back never re-uploads anything.
+  #   visec        source: visec  dir: /refs/visec      147 spk, emotional, no transcripts
+  #   vivos 10s    source: vivos  dir: /refs/vivos/v10   65 spk, read speech, transcripts
+  #   vivos 30s    source: vivos  dir: /refs/vivos/v30   same 65 spk, ~29.6s references
+  # target_seconds must match the dir suffix -- it is what build-refs and the plan
+  # hash use, so a mismatch would silently generate from the wrong variant.
   source: "vivos"
-  dir: "/refs/vivos"
-  target_seconds: 10
+  dir: "/refs/vivos/v30"    # v10 or v30 — one subdir per duration variant
+  target_seconds: 30
 
 speaker:
   policy: per_conversation

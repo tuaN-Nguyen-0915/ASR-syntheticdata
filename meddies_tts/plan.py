@@ -205,6 +205,14 @@ def compute_plan_hash(plan: pa.Table, cfg: Config, config: str) -> str:
         "text_spoken_digest": text_spoken_digest,
         "speaker_policy": cfg.speaker.policy,
         "speaker_pool": cfg.speaker.pool,
+        # The reference pool decides what every utterance SOUNDS like, so it belongs
+        # here with the engine parameters. target_seconds especially: switching
+        # source is caught incidentally because ViSEC and VIVOS have different
+        # speaker ids in "rows", but 10s vs 30s VIVOS references share ids and
+        # would otherwise hash identically -- letting a re-run be skipped as
+        # "already published" while producing completely different audio.
+        "refs_source": cfg.refs.source,
+        "refs_target_seconds": cfg.refs.target_seconds,
         "seed_salt": cfg.speaker.seed_salt,
         "convs_per_shard": cfg.run.convs_per_shard,
         "text_chunk_max_chars": cfg.text.chunk_max_chars,

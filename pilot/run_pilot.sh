@@ -15,7 +15,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
 VISEC="/Users/phananhtuannguyen/Desktop/Project/ASR-syntheticdata/data/ViSEC-processed/processed_audio_by_id"
-VIVOS="pilot/refs_vivos/processed_audio_by_id"
+# Each VIVOS duration variant gets its own subdirectory on the one vivos-refs
+# Volume (/v10, /v30, ...), so switching variants never overwrites another and
+# refs.dir alone selects which one the container reads.
+REFS_SECONDS="$(python3 -c "import yaml;print((yaml.safe_load(open('pilot/pilot.yaml')).get('refs') or {}).get('target_seconds',10))")"
+VIVOS="pilot/refs_vivos${REFS_SECONDS}/processed_audio_by_id"
+[ -d "$VIVOS" ] || VIVOS="pilot/refs_vivos/processed_audio_by_id"   # 10s built without a suffix
+VIVOS_REMOTE="/v${REFS_SECONDS}/processed_audio_by_id"
 # Which pool this run uses, read straight from the config so the script and the
 # container can never disagree about it.
 REFS_SOURCE="$(python3 -c "import yaml;print((yaml.safe_load(open('pilot/pilot.yaml')).get('refs') or {}).get('source','visec'))")"
@@ -49,7 +55,7 @@ check_prereqs() {
 
   if [ "$REFS_SOURCE" = "vivos" ]; then
     [ -d "$VIVOS" ] || die "VIVOS refs missing — run: python3 cli.py --config $CONFIG build-refs --dest pilot/refs_vivos"
-    green "  refs pool: vivos ($(ls "$VIVOS"/*.wav 2>/dev/null | wc -l | tr -d ' ') wav files)"
+    green "  refs pool: vivos ${REFS_SECONDS}s ($(ls "$VIVOS"/*.wav 2>/dev/null | wc -l | tr -d ' ') wav files)"
   else
     [ -d "$VISEC" ] || die "ViSEC reference audio not found at $VISEC"
     green "  refs pool: visec ($(ls "$VISEC"/*.wav 2>/dev/null | wc -l | tr -d ' ') wav files)"
@@ -82,13 +88,13 @@ do_setup() {
   # Each pool lives on its own Volume, both mounted by app.py, so switching back
   # never re-uploads anything that is already there.
   if [ "$REFS_SOURCE" = "vivos" ]; then
-    step "Uploading 65 VIVOS reference wavs (~22 MB, one-time)"
-    if modal volume ls vivos-refs /processed_audio_by_id >/dev/null 2>&1; then
-      green "  already uploaded — skipping"
+    step "Uploading 65 VIVOS ${REFS_SECONDS}s reference wavs"
+    if modal volume ls vivos-refs "$VIVOS_REMOTE" >/dev/null 2>&1; then
+      green "  ${REFS_SECONDS}s variant already uploaded — skipping"
     else
       modal volume create vivos-refs 2>/dev/null || true
-      modal volume put vivos-refs "$VIVOS" /processed_audio_by_id
-      green "  VIVOS references uploaded"
+      modal volume put vivos-refs "$VIVOS" "$VIVOS_REMOTE"
+      green "  VIVOS ${REFS_SECONDS}s references uploaded"
     fi
   else
     step "Uploading 147 ViSEC reference wavs (~54 MB, one-time)"
@@ -116,7 +122,7 @@ do_generate() {
 
   step "PAID RUN — 54 utterances, 1 shard, ~\$0.02 of A100 time"
   echo "  Target repo : npat1509/TestSynth  (public)"
-  echo "  Refs pool   : $REFS_SOURCE"
+  echo "  Refs pool   : $REFS_SOURCE ${REFS_SECONDS}s"
   echo "  Plan hash   : $(python3 -c "import json;print(json.load(open('pilot/shard_plan.hash'))['vietnamese'])")"
   echo
   # Confirmation must work without a TTY (this gets driven from tooling that has no

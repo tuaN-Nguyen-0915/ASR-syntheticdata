@@ -168,3 +168,41 @@ def test_build_refs_on_visec_explains_that_nothing_is_needed(tmp_path, capsys):
     rc = cli.main(["--config", str(cfg_path), "build-refs", "--dest", str(tmp_path / "out")])
     assert rc == 0
     assert "nothing to build" in capsys.readouterr().out
+
+
+def test_plan_hash_changes_with_the_reference_duration_variant():
+    """10s and 30s VIVOS references share speaker ids, so nothing else distinguishes them.
+
+    Without refs_target_seconds in the hash payload, an A/B between reference
+    durations would produce an identical hash: drift detection stays silent and
+    remaining_targets skips the shard as already published, even though every
+    utterance's audio differs.
+    """
+    import dataclasses
+
+    from meddies_tts.plan import build_plan, compute_plan_hash
+    from tests.tts.test_plan import _cfg, _manifest, _pool, _NORMALIZERS
+
+    base = _cfg()
+    ten = dataclasses.replace(base, refs=dataclasses.replace(base.refs, target_seconds=10))
+    thirty = dataclasses.replace(base, refs=dataclasses.replace(base.refs, target_seconds=30))
+
+    plan_a, _ = build_plan(_manifest(n_convs=2), ten, _pool(), _NORMALIZERS)
+    plan_b, _ = build_plan(_manifest(n_convs=2), thirty, _pool(), _NORMALIZERS)
+    assert (compute_plan_hash(plan_a, ten, "vietnamese")
+            != compute_plan_hash(plan_b, thirty, "vietnamese"))
+
+
+def test_plan_hash_changes_with_the_reference_source():
+    import dataclasses
+
+    from meddies_tts.plan import build_plan, compute_plan_hash
+    from tests.tts.test_plan import _cfg, _manifest, _pool, _NORMALIZERS
+
+    base = _cfg()
+    a = dataclasses.replace(base, refs=dataclasses.replace(base.refs, source="visec"))
+    b = dataclasses.replace(base, refs=dataclasses.replace(base.refs, source="vivos"))
+    plan_a, _ = build_plan(_manifest(n_convs=2), a, _pool(), _NORMALIZERS)
+    plan_b, _ = build_plan(_manifest(n_convs=2), b, _pool(), _NORMALIZERS)
+    assert (compute_plan_hash(plan_a, a, "vietnamese")
+            != compute_plan_hash(plan_b, b, "vietnamese"))
