@@ -203,3 +203,24 @@ def test_build_plan_keeps_a_clean_user_turn():
     plan, rejects = build_plan(manifest, _cfg(), _pool(), _NORMALIZERS)
     assert sorted(plan.column("role").to_pylist()) == ["assistant", "user"]
     assert rejects == []
+
+
+def test_a_divergence_mid_quote_does_not_leave_an_orphaned_fragment():
+    """A prefix match stops at the FIRST character where the two copies differ.
+
+    Real case (amh_thap/conv_0001/Turn4): the cut landed mid-question and left
+    ~250 chars of the doctor still attached to the front of the "reply". The tail
+    anchor finds where the quote actually ends so the whole thing goes.
+    """
+    assistant = (
+        "Cảm ơn anh đã chia sẻ chi tiết về tình trạng của mình trong thời gian qua. "
+        "Tôi hiểu anh đang rất lo lắng và phân vân giữa nhiều lựa chọn khác nhau. "
+        "Hai vợ chồng anh đã sẵn sàng về tài chính và tâm lý cho phương án này chưa? "
+        "Đây là chi phí không nhỏ và cần sự chuẩn bị kỹ lưỡng từ cả hai phía."
+    )
+    # The quote diverges partway through ("rất lo lắng" -> "khá lo lắng"), which is
+    # exactly what truncates a prefix match.
+    quoted = assistant.replace("rất lo lắng", "khá lo lắng")
+    reply = "Tôi cảm thấy mệt mỏi kéo dài khoảng ba tháng nay, có giảm ham muốn và khó ngủ."
+    out = strip_assistant_echo(f"> **Bác sĩ Meddies**: {quoted} {reply}", [assistant])
+    assert out == reply, f"orphaned fragment left behind: {out[:80]!r}"

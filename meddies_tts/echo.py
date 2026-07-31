@@ -45,6 +45,9 @@ from meddies_tts.textprep import strip_markup, strip_reasoning
 
 _NOISE = re.compile(r"[^0-9a-zà-ỹA-ZÀ-Ỹ\s]+")
 _SPACES = re.compile(r"\s+")
+# Sentence terminators used to snap a cut forward. '?' and '!' are here because
+# the snap runs on RAW text, before clean_punctuation maps them to '.'.
+_TERMINATOR = re.compile(r"[.!?…]")
 
 # Floor for treating a match as a quoted turn. See the module docstring: below
 # this, contaminated and genuine utterances are indistinguishable.
@@ -69,6 +72,27 @@ def _canonical(text: str) -> tuple[str, list[int]]:
         index.append(i)
         prev_space = False
     return "".join(out), index
+
+
+# Characters of the quoted turn's TAIL used to locate where the echo ends. Long
+# enough to be unique within a conversation, short enough to survive the small
+# divergences (typos, stray markup) that truncate a prefix match.
+_ANCHOR = 60
+
+
+def _echo_end_by_suffix(canon_assistant: str, canon_user: str) -> int:
+    """Position just past the quoted turn, found from its ending rather than its start.
+
+    A prefix match stops at the FIRST divergence between the two copies, which is
+    usually mid-sentence and leaves the rest of the quote sitting in the "reply".
+    Anchoring on the tail finds where the quote actually ends, so the whole thing
+    is removed. Returns -1 when the tail is not present.
+    """
+    if len(canon_assistant) < _ANCHOR:
+        return -1
+    anchor = canon_assistant[-_ANCHOR:]
+    at = canon_user.rfind(anchor)
+    return at + _ANCHOR if at >= 0 else -1
 
 
 def _longest_prefix_in(needle: str, haystack: str) -> int:
@@ -113,6 +137,28 @@ def strip_assistant_echo(user_text: str, assistant_texts: list[str] | str) -> st
     return user_text
 
 
+# How far past a mid-sentence cut to look for a terminator. Long enough to clear
+# the orphaned tail of a quoted question, short enough that a genuine reply
+# beginning mid-clause is not discarded.
+_SNAP_WINDOW = 400
+
+
+def _snap_to_sentence(tail: str) -> str:
+    """Advance a cut to the next sentence boundary if it landed mid-sentence."""
+    stripped = tail.lstrip()
+    if not stripped:
+        return tail
+    # A cut that already sits at a sentence start needs no adjustment. Detected by
+    # the remainder beginning with a capital letter, which is what follows a
+    # terminator in this corpus.
+    if stripped[0].isupper():
+        return tail
+    match = _TERMINATOR.search(stripped[:_SNAP_WINDOW])
+    if not match:
+        return tail
+    return stripped[match.end():].lstrip()
+
+
 def _strip_once(user_text: str, assistant_texts: list[str]) -> str:
     """Remove the single longest quoted assistant turn, if one is above the floor."""
     canon_user, index = _canonical(user_text)
@@ -121,7 +167,7 @@ def _strip_once(user_text: str, assistant_texts: list[str]) -> str:
 
     # Take the LONGEST match across all turns. A contaminated file often shares a
     # short greeting with several turns; the longest identifies the real source.
-    best_len, best_at = 0, -1
+    best_len, best_at, best_end = 0, -1, -1
     for assistant_text in assistant_texts:
         canon_assistant, _ = _canonical(assistant_text)
         if len(canon_assistant) < MIN_ECHO_CHARS:
@@ -133,12 +179,23 @@ def _strip_once(user_text: str, assistant_texts: list[str]) -> str:
         if length > best_len:
             best_len = length
             best_at = canon_user.find(canon_assistant[:length])
+            # A prefix match truncated by a divergence understates where the quote
+            # ends; the tail anchor recovers the rest. Take whichever reaches further.
+            by_suffix = _echo_end_by_suffix(canon_assistant, canon_user)
+            best_end = max(best_at + length, by_suffix)
 
     if best_len < MIN_ECHO_CHARS or best_at < 0:
         return user_text
 
-    end = best_at + best_len
+    end = max(best_at + best_len, best_end)
     tail = user_text[index[end]:] if end < len(index) else ""
+    # The match ends wherever the two copies first diverge, which is usually
+    # mid-sentence -- leaving an orphaned fragment of the quoted turn at the front
+    # of the "reply". Snapping forward to the next terminator drops that fragment.
+    # Only snap when the remainder does NOT already start at a sentence boundary,
+    # and only across a short distance, so a clean cut is never moved and a reply
+    # with no early terminator is never swallowed whole.
+    tail = _snap_to_sentence(tail)
     head = user_text[:index[best_at]] if best_at < len(index) else ""
     # Text before the quote is the reasoning block plus the speaker label the
     # corpus writes ("> **Bác sĩ Meddies**: "), neither of which the patient says.
