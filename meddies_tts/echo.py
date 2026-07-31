@@ -159,42 +159,58 @@ def _snap_to_sentence(tail: str) -> str:
     return stripped[match.end():].lstrip()
 
 
+def _locate_quote(canon_assistant: str, canon_user: str) -> tuple[int, int]:
+    """Find where a quoted assistant turn starts and ends inside the user text.
+
+    Anchors on the first and last _ANCHOR characters INDEPENDENTLY rather than
+    matching the turn as one block. The two copies routinely diverge somewhere in
+    the middle -- a typo, a stray marker -- and a single whole-or-prefix match
+    either fails outright or stops at the divergence and leaves the rest of the
+    quote sitting at the front of the "reply". Two anchors survive any amount of
+    drift between them. Returns (-1, -1) when the turn is not quoted here.
+    """
+    if len(canon_assistant) < _ANCHOR * 2:
+        return -1, -1
+    head_at = canon_user.find(canon_assistant[:_ANCHOR])
+    if head_at < 0:
+        return -1, -1
+    tail_at = canon_user.rfind(canon_assistant[-_ANCHOR:])
+    if tail_at < head_at:
+        # Tail missing or ahead of the head: fall back to the longest prefix, which
+        # still handles a quote that was truncated rather than altered.
+        length = _longest_prefix_in(canon_assistant, canon_user)
+        if length < MIN_ECHO_CHARS:
+            return -1, -1
+        return head_at, head_at + length
+    end = tail_at + _ANCHOR
+    if end - head_at < MIN_ECHO_CHARS:
+        return -1, -1
+    return head_at, end
+
+
 def _strip_once(user_text: str, assistant_texts: list[str]) -> str:
     """Remove the single longest quoted assistant turn, if one is above the floor."""
     canon_user, index = _canonical(user_text)
     if len(canon_user) < MIN_ECHO_CHARS:
         return user_text
 
-    # Take the LONGEST match across all turns. A contaminated file often shares a
+    # Take the LONGEST span across all turns. A contaminated file often shares a
     # short greeting with several turns; the longest identifies the real source.
-    best_len, best_at, best_end = 0, -1, -1
+    best_at, best_end = -1, -1
     for assistant_text in assistant_texts:
         canon_assistant, _ = _canonical(assistant_text)
         if len(canon_assistant) < MIN_ECHO_CHARS:
             continue
-        if canon_assistant in canon_user:
-            length = len(canon_assistant)
-        else:
-            length = _longest_prefix_in(canon_assistant, canon_user)
-        if length > best_len:
-            best_len = length
-            best_at = canon_user.find(canon_assistant[:length])
-            # A prefix match truncated by a divergence understates where the quote
-            # ends; the tail anchor recovers the rest. Take whichever reaches further.
-            by_suffix = _echo_end_by_suffix(canon_assistant, canon_user)
-            best_end = max(best_at + length, by_suffix)
+        at, end = _locate_quote(canon_assistant, canon_user)
+        if at >= 0 and end - at > best_end - best_at:
+            best_at, best_end = at, end
 
-    if best_len < MIN_ECHO_CHARS or best_at < 0:
+    if best_at < 0:
         return user_text
 
-    end = max(best_at + best_len, best_end)
-    tail = user_text[index[end]:] if end < len(index) else ""
-    # The match ends wherever the two copies first diverge, which is usually
-    # mid-sentence -- leaving an orphaned fragment of the quoted turn at the front
-    # of the "reply". Snapping forward to the next terminator drops that fragment.
-    # Only snap when the remainder does NOT already start at a sentence boundary,
-    # and only across a short distance, so a clean cut is never moved and a reply
-    # with no early terminator is never swallowed whole.
+    tail = user_text[index[best_end]:] if best_end < len(index) else ""
+    # The span can still end mid-sentence when the tail anchor lands inside one;
+    # snapping forward drops the leftover fragment.
     tail = _snap_to_sentence(tail)
     head = user_text[:index[best_at]] if best_at < len(index) else ""
     # Text before the quote is the reasoning block plus the speaker label the
