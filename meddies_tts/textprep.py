@@ -16,6 +16,10 @@ from meddies_tts.vietnamese_numbers import (
 
 _WHITESPACE = re.compile(r"\s+")
 
+# Longest digit run still treated as a quantity. Above this it is read out
+# digit by digit; 15 covers phone numbers and record ids.
+_MAX_NUMBER_DIGITS = 15
+
 # --- leaked reasoning blocks -------------------------------------------------
 # Upstream bug: meddies/think_strip.py only knows the literal <think>/</think>
 # pair, so other reasoning tags (and unclosed <think>) survive into output_full.
@@ -83,6 +87,11 @@ _BOLD = re.compile(r"\*{1,3}")
 _BULLET = re.compile(r"(?:(?<=\n)|^)\s*[-*•]\s+", re.MULTILINE)
 _ORDERED = re.compile(r"(?:(?<=\n)|^)\s*\d+[.)]\s+", re.MULTILINE)
 _HEADING = re.compile(r"(?:(?<=\n)|^)\s*#{1,6}\s*", re.MULTILINE)
+# Blockquote markers. The corpus quotes the assistant's whole turn back inside
+# user.txt as "> **Bác sĩ Meddies**: ...", with "> >" between paragraphs, so
+# without this the quoted text keeps stray '>' and no longer matches the
+# assistant file verbatim -- which is exactly how the echo is detected.
+_QUOTE = re.compile(r"(?:(?<=\n)|(?<=\.)|^)\s*>[>\s]*")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 # --- numeric vocabulary (unit list measured from the corpus) ----------------
@@ -156,6 +165,7 @@ def strip_reasoning(text: str) -> str:
 def strip_markup(text: str) -> str:
     """Remove reasoning leakage and markdown, then collapse whitespace."""
     without = _strip_reasoning_tags(text)
+    without = _QUOTE.sub("", without)
     without = _HEADING.sub("", without)
     without = _ORDERED.sub("", without)
     without = _BULLET.sub("", without)
@@ -305,6 +315,14 @@ def _normalize_numbers(text: str, dialect: Dialect = NORTHERN) -> str:
     out = re.sub(
         rf"(\d+)\s*({_UNIT_ALT})(?![A-Za-zÀ-ỹ])",
         lambda m: f"{number_to_words(int(m[1]), dialect)} {_unit(m[2])}", out)
+    # A digit run longer than any real quantity is degenerate corpus text, not a
+    # number. int() itself refuses to parse beyond 4300 digits (ValueError), so
+    # without this a single bad utterance takes down the whole plan build. Today
+    # text.max_chars=3000 happens to reject such texts first, but that is an
+    # implicit coupling: raise max_chars past 4300 and this path is reachable.
+    # Reading digit-by-digit is what a person does with an ID-like string anyway.
+    out = re.sub(
+        rf"\b\d{{{_MAX_NUMBER_DIGITS + 1},}}\b", lambda m: digits_to_words(m[0]), out)
     out = re.sub(
         r"\b\d+\b",
         lambda m: digits_to_words(m[0]) if m[0] in _HOTLINES else number_to_words(int(m[0]), dialect),

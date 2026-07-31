@@ -1,5 +1,5 @@
 ✓ Initialized. View run at 
-https://modal.com/apps/tuan-phannguyen1509/main/ap-wMssosuLZNBJEFLBogfbz7
+https://modal.com/apps/tuan-phannguyen1509/main/ap-v8SP1U5QiFaJypIE4H0pVk
 ✓ Created objects.
 ├── 🔨 Created mount 
 │   /Users/phananhtuannguyen/Desktop/Project/ASR-syntheticdata/.claude/worktrees
@@ -15,94 +15,77 @@ dispatching 1 shard(s) to A100-40GB
 /usr/local/lib/python3.11/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
   WeightNorm.apply(module, name, dim)
 ready: engine=nanovllm-voxcpm/2.0.3 refs=65 source=vivos sample_rate=48000
-W0730 04:54:19.734000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] torch._dynamo hit config.recompile_limit (8)
-W0730 04:54:19.734000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8]    function: 'snake' (/usr/local/lib/python3.11/site-packages/nanovllm_voxcpm/layers/audio_vae_v2.py:48)
-W0730 04:54:19.734000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8]    last reason: 1/7: tensor 'x' size mismatch at index 1. expected 1024, actual 512
-W0730 04:54:19.734000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
-W0730 04:54:19.734000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+W0731 03:29:51.022000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] torch._dynamo hit config.recompile_limit (8)
+W0731 03:29:51.022000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8]    function: 'snake' (/usr/local/lib/python3.11/site-packages/nanovllm_voxcpm/layers/audio_vae_v2.py:48)
+W0731 03:29:51.022000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8]    last reason: 1/7: tensor 'x' size mismatch at index 1. expected 1024, actual 512
+W0731 03:29:51.022000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W0731 03:29:51.022000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+W0731 03:30:21.777000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+W0731 03:30:21.777000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'forward' (/usr/local/lib/python3.11/site-packages/nanovllm_voxcpm/layers/activation.py:11)
+W0731 03:30:21.777000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 3, actual 2
+W0731 03:30:21.777000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W0731 03:30:21.777000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
 
 [1AProcessing Files (0 / 0)      : |          |  0.00B /  0.00B            
 
+[1A
 [1ANew Data Upload               : |          |  0.00B /  0.00B            [A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 29.7MB            [A[A
+[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 29.3MB            [A[A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 29.7MB            [A[A
-[1AProcessing Files (0 / 1)      :   0%|          | 12.2kB / 29.7MB,   ???B/s  
+[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 29.3MB            [A[A
+[1AProcessing Files (0 / 1)      :   0%|          | 12.2kB / 29.3MB,   ???B/s  
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 29.7MB            [A[A
-
-
-[1A  /tmp/vi-00000.parquet       :   2%|▏         |  537kB / 29.7MB            [A[A
-[1AProcessing Files (0 / 1)      :   2%|▏         |  537kB / 29.7MB, 53.2kB/s  
+[1A  /tmp/vi-00000.parquet       :  90%|████████▉ | 26.3MB / 29.3MB            [A[A
+[1AProcessing Files (0 / 1)      :  90%|████████▉ | 26.3MB / 29.3MB,   ???B/s  
 
 [1A
-[1ANew Data Upload               :   2%|▏         |  525kB / 29.7MB, 52.0kB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :   9%|▉         | 2.64MB / 29.7MB            [A[A
-[1AProcessing Files (0 / 1)      :   9%|▉         | 2.64MB / 29.7MB,  260kB/s  
-
-[1A
-[1ANew Data Upload               :   9%|▉         | 2.63MB / 29.7MB,  259kB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :  55%|█████▍    | 16.3MB / 29.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  55%|█████▍    | 16.3MB / 29.7MB, 1.60MB/s  
-
-[1A
-[1ANew Data Upload               :  55%|█████▍    | 16.3MB / 29.7MB, 1.60MB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :  97%|█████████▋| 28.9MB / 29.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  97%|█████████▋| 28.9MB / 29.7MB, 2.82MB/s  
-
-[1A
-[1ANew Data Upload               :  97%|█████████▋| 28.9MB / 29.7MB, 2.82MB/s  [A
+[1ANew Data Upload               :  90%|████████▉ | 26.2MB / 29.2MB,   ???B/s  [A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :  99%|█████████▉| 29.4MB / 29.7MB            [A[A
-[1AProcessing Files (0 / 1)      :  99%|█████████▉| 29.4MB / 29.7MB, 2.85MB/s  
+[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 28.9MB / 29.3MB            [A[A
+[1AProcessing Files (0 / 1)      :  99%|█████████▊| 28.9MB / 29.3MB,   ???B/s  
 
 [1A
-[1ANew Data Upload               :  99%|█████████▉| 29.4MB / 29.7MB, 2.85MB/s  [A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  99%|█████████▉| 29.4MB / 29.7MB            [A[A
+[1ANew Data Upload               :  99%|█████████▊| 28.9MB / 29.2MB,   ???B/s  [A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :  99%|█████████▉| 29.4MB / 29.7MB            [A[A
-
-
-[1A  /tmp/vi-00000.parquet       :  99%|█████████▉| 29.4MB / 29.7MB            [A[A
+[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 28.9MB / 29.3MB            [A[A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 29.7MB / 29.7MB            [A[A
-[1AProcessing Files (1 / 1)      : 100%|██████████| 29.7MB / 29.7MB, 2.76MB/s  
+[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 28.9MB / 29.3MB            [A[A
+
 
 [1A
-[1ANew Data Upload               : 100%|██████████| 29.7MB / 29.7MB, 2.76MB/s  [A
+[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 28.9MB / 29.3MB            [A[A
 
 
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 29.7MB / 29.7MB            [A[A
+[1A
+[1A  /tmp/vi-00000.parquet       : 100%|██████████| 29.3MB / 29.3MB            [A[A
+[1AProcessing Files (1 / 1)      : 100%|██████████| 29.3MB / 29.3MB, 2.78MB/s  
+
+[1A
+[1ANew Data Upload               : 100%|██████████| 29.2MB / 29.2MB, 2.78MB/s  [A
 
 
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 29.7MB / 29.7MB            [A[A
-[1AProcessing Files (1 / 1)      : 100%|██████████| 29.7MB / 29.7MB, 2.72MB/s  
-New Data Upload               : 100%|██████████| 29.7MB / 29.7MB, 2.72MB/s  
-  /tmp/vi-00000.parquet       : 100%|██████████| 29.7MB / 29.7MB            
-an error occurred during closing of asynchronous generator <async_generator object Synchronizer._run_generator_async at 0x153c3a770>
-asyncgen: <async_generator object Synchronizer._run_generator_async at 0x153c3a770>
+[1A
+[1A  /tmp/vi-00000.parquet       : 100%|██████████| 29.3MB / 29.3MB            [A[A
+[1AProcessing Files (1 / 1)      : 100%|██████████| 29.3MB / 29.3MB, 2.76MB/s  
+
+[1ANew Data Upload               : 100%|██████████| 29.2MB / 29.2MB, 2.76MB/s  
+
+[1A  /tmp/vi-00000.parquet       : 100%|██████████| 29.3MB / 29.3MB            
+an error occurred during closing of asynchronous generator <async_generator object Synchronizer._run_generator_async at 0x12423a770>
+asyncgen: <async_generator object Synchronizer._run_generator_async at 0x12423a770>
 Traceback (most recent call last):
   File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/modal/_utils/async_utils.py", line 839, in __iter__
     yield from run_async_gen(runner, self._async_iterable)
@@ -111,8 +94,8 @@ GeneratorExit
 During handling of the above exception, another exception occurred:
 
 RuntimeError: aclose(): asynchronous generator is already running
-an error occurred during closing of asynchronous generator <async_generator object async_merge at 0x153c265a0>
-asyncgen: <async_generator object async_merge at 0x153c265a0>
+an error occurred during closing of asynchronous generator <async_generator object async_merge at 0x1242265a0>
+asyncgen: <async_generator object async_merge at 0x1242265a0>
 Traceback (most recent call last):
   File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/modal/_utils/async_utils.py", line 839, in __iter__
     yield from run_async_gen(runner, self._async_iterable)
@@ -122,10 +105,10 @@ During handling of the above exception, another exception occurred:
 
 RuntimeError: aclose(): asynchronous generator is already running
 Task was destroyed but it is pending!
-task: <Task pending name='Task-1481' coro=<<async_generator_athrow without __name__>()> wait_for=<Future finished result=None>>
-{"shard_id": "vi-00000", "status": "ok", "utterances": 54, "failed": 0, "audio_seconds": 1731.9000000000003, "wall_seconds": 225.54313445091248, "rtf": 0.13022872824696138, "failures": []}
-done: 0.48 h of audio generated | 1 shard(s): ok=1
+task: <Task pending name='Task-1285' coro=<<async_generator_athrow without __name__>()> wait_for=<Future finished result=None>>
+{"shard_id": "vi-00000", "status": "ok", "utterances": 54, "failed": 0, "audio_seconds": 1688.22, "wall_seconds": 194.8037552833557, "rtf": 0.11539002931096404, "failures": []}
+done: 0.47 h of audio generated | 1 shard(s): ok=1
 Stopping app - local entrypoint completed.
-[modal-client] 2026-07-30T11:58:07+0700 Timed out waiting for final app logs.
+Runner terminated.
 ✓ App completed. View run at 
-https://modal.com/apps/tuan-phannguyen1509/main/ap-wMssosuLZNBJEFLBogfbz7
+https://modal.com/apps/tuan-phannguyen1509/main/ap-v8SP1U5QiFaJypIE4H0pVk

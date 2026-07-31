@@ -347,3 +347,18 @@ def test_decimal_without_a_trailing_unit_keeps_its_following_space():
 
 def test_fraction_without_a_trailing_unit_keeps_its_following_space():
     assert _VN.normalize("Tỷ lệ 6/10 vậy đó.") == "Tỷ lệ sáu trên mười vậy đó."
+
+
+def test_absurdly_long_digit_run_does_not_crash_the_normalizer():
+    """int() raises ValueError past 4300 digits, which would abort a whole plan build.
+
+    Found by a corpus scan: one utterance carries a 10,433-digit run. text.max_chars
+    rejects such texts first today, but only because 3000 < 4300 -- an implicit
+    coupling this guard removes.
+    """
+    out = _VN.normalize("Mã số " + "7" * 5000)
+    assert out.startswith("Mã số bảy bảy")
+
+
+def test_a_normal_length_number_is_still_read_as_a_quantity():
+    assert _VN.normalize("Tôi 45 tuổi.") == "Tôi bốn mươi lăm tuổi."

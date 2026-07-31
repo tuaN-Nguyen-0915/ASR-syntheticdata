@@ -24,7 +24,11 @@ green() { printf "\033[32m%s\033[0m\n" "$1"; }
 step()  { printf "\n\033[1m== %s\033[0m\n" "$1"; }
 
 DEST="pilot/refs_vivos${SECONDS_VARIANT}"
-AUDIO="pilot/audio_ref${SECONDS_VARIANT}"
+# Output is keyed by reference duration AND inference_timesteps: both change what
+# the audio sounds like, and a run that overwrites its own comparison baseline is
+# worse than useless.
+STEPS="$(python3 -c "import yaml;print((yaml.safe_load(open('pilot/pilot.yaml')).get('engine') or {}).get('inference_timesteps',10))")"
+AUDIO="pilot/audio_ref${SECONDS_VARIANT}_steps${STEPS}"
 
 step "1/6  Building the ${SECONDS_VARIANT}s reference pool"
 if [ -d "$DEST/processed_audio_by_id" ]; then
@@ -83,7 +87,7 @@ PY
 ./pilot/run_pilot.sh generate --yes 2>&1 | grep -E '^ready:|"shard_id"|^done:'
 
 step "6/6  Extracting audio to $AUDIO/"
-python3 - "$SECONDS_VARIANT" <<'PY'
+python3 - "$SECONDS_VARIANT" "$AUDIO" <<'PY'
 import sys, pathlib, shutil
 import pyarrow.parquet as pq
 from huggingface_hub import HfApi
@@ -91,7 +95,7 @@ n = sys.argv[1]
 t = pq.read_table(HfApi().hf_hub_download(
     "npat1509/TestSynth", "data/vietnamese/train-00000-of-00001.parquet",
     repo_type="dataset"))
-out = pathlib.Path(f"pilot/audio_ref{n}")
+out = pathlib.Path(sys.argv[2])
 if out.exists(): shutil.rmtree(out)
 out.mkdir(parents=True)
 for r in t.to_pylist():

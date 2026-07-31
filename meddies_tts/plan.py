@@ -9,6 +9,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
+from meddies_tts.echo import strip_assistant_echo
 from meddies_tts.config import Config
 from meddies_tts.reject import check
 from meddies_tts.speakers import Speaker, derive_seed, get_assigner
@@ -72,12 +73,27 @@ def build_plan(
 
     kept: list[dict] = []
     rejects: list[dict] = []
+    # The corpus copies the assistant's whole turn into user.txt before the
+    # patient's reply, so a user utterance needs its sibling to be cleaned. Built
+    # once here rather than re-scanned per row.
+    assistant_text = {
+        (r["config"], r["disease_slug"], r["conv_id"], r["turn"]): r["text_raw"]
+        for r in manifest.to_pylist() if r["role"] == "assistant"
+    }
+
     for row in manifest.to_pylist():
         config = row["config"]
         if config not in cfg.run.configs:
             continue
         path = audio_path(config, row["disease_slug"], row["conv_id"], row["turn"], row["role"])
-        rejection = check(row["text_raw"], cfg.text)
+        text_raw = row["text_raw"]
+        if row["role"] == "user":
+            sibling = assistant_text.get(
+                (config, row["disease_slug"], row["conv_id"], row["turn"])
+            )
+            if sibling:
+                text_raw = strip_assistant_echo(text_raw, sibling)
+        rejection = check(text_raw, cfg.text)
         if rejection is not None:
             rejects.append(
                 {
@@ -106,7 +122,7 @@ def build_plan(
                 derive_seed(cfg.speaker.seed_salt, "dialect", speaker_id)
             )
             cache[key] = get_normalizer(config, dialect)
-        spoken = cache[key].normalize(row["text_raw"])
+        spoken = cache[key].normalize(text_raw)
         if not spoken:
             # Normalization can legitimately reduce text to nothing (e.g. an
             # utterance that was pure markup/reasoning leakage); that utterance
