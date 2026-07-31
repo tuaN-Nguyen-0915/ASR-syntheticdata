@@ -93,24 +93,15 @@ def build_plan(
         text_raw = row["text_raw"]
         if row["role"] == "user":
             turns = assistant_text.get((config, row["disease_slug"], row["conv_id"]))
-            # Detection, not repair. Spot-checking the salvaged remainder showed it
-            # is usually still not patient speech: of 6 sampled, 5 were the doctor
-            # talking or leaked reasoning (22% of all survivors still carry
-            # reasoning markers), and one was cut mid-word. A file carrying a
-            # quoted assistant turn is contaminated throughout, so removing one
-            # quote just exposes the next. Dropping the utterance is 1.56% of the
-            # corpus; the raw text is preserved in rejects.jsonl either way.
-            if turns and strip_assistant_echo(text_raw, turns) != text_raw:
-                rejects.append(
-                    {
-                        "audio_path": path,
-                        "reason": "assistant_echo",
-                        "detail": "user.txt contains a quoted assistant turn "
-                                  f"({len(text_raw)} raw chars)",
-                        "text_raw": text_raw,
-                    }
-                )
-                continue
+            if turns:
+                # Clean the quoted assistant turn out, but never drop the utterance:
+                # every user turn must keep its assistant partner so conversations
+                # stay whole. When a file is nothing BUT the quote, stripping leaves
+                # no text to speak, so the original is used -- that utterance is
+                # knowingly bad audio rather than a hole in the dialogue.
+                cleaned = strip_assistant_echo(text_raw, turns)
+                if cleaned.strip():
+                    text_raw = cleaned
         rejection = check(text_raw, cfg.text)
         if rejection is not None:
             rejects.append(

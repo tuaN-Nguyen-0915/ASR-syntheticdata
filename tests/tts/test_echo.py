@@ -127,11 +127,41 @@ def test_a_single_string_is_still_accepted():
 
 # --- plan-level behaviour: detect and reject, do not repair -------------------
 
-def test_build_plan_rejects_a_user_turn_carrying_a_quoted_assistant_turn():
-    """Contaminated user turns are dropped, not salvaged.
+def test_build_plan_cleans_a_quoted_turn_without_dropping_the_utterance():
+    """Conversations must stay whole: clean the echo, keep the pair."""
+    import pyarrow as pa
 
-    The salvaged remainder is usually still not patient speech: of 6 sampled,
-    5 were the doctor talking or leaked reasoning, and one was cut mid-word.
+    from meddies_tts.plan import build_plan
+    from tests.tts.test_plan import _cfg, _pool, _NORMALIZERS
+
+    assistant = (
+        "Cảm ơn anh đã chia sẻ. Tôi hiểu anh đang lo lắng về kết quả xét nghiệm "
+        "và ảnh hưởng của nó đến kế hoạch điều trị sắp tới của gia đình mình. "
+        "Anh có thể cho tôi biết chỉ số cụ thể là bao nhiêu không ạ?"
+    )
+    manifest = pa.Table.from_pylist([
+        {"config": "vietnamese", "disease_slug": "d", "disease_name": "D",
+         "conv_id": "conv_0001", "turn": 1, "role": "assistant", "text_raw": assistant},
+        {"config": "vietnamese", "disease_slug": "d", "disease_name": "D",
+         "conv_id": "conv_0001", "turn": 1, "role": "user",
+         "text_raw": f"> **Bác sĩ Meddies**: {assistant} Chỉ số của tôi là 0.8 ạ."},
+    ])
+    plan, rejects = build_plan(manifest, _cfg(), _pool(), _NORMALIZERS)
+
+    assert sorted(plan.column("role").to_pylist()) == ["assistant", "user"], (
+        "both halves of the turn must survive"
+    )
+    assert rejects == []
+    user_row = next(r for r in plan.to_pylist() if r["role"] == "user")
+    assert "Chỉ số của tôi" in user_row["text_spoken"]
+    assert "Cảm ơn anh đã chia sẻ" not in user_row["text_spoken"], "echo not removed"
+
+
+def test_a_pure_echo_utterance_falls_back_to_its_original_text():
+    """When stripping leaves nothing there is no text to speak.
+
+    Dropping would break the pair, so the original is kept instead -- knowingly
+    bad audio rather than a hole in the conversation.
     """
     import pyarrow as pa
 
@@ -146,18 +176,14 @@ def test_build_plan_rejects_a_user_turn_carrying_a_quoted_assistant_turn():
     manifest = pa.Table.from_pylist([
         {"config": "vietnamese", "disease_slug": "d", "disease_name": "D",
          "conv_id": "conv_0001", "turn": 1, "role": "assistant", "text_raw": assistant},
-        # The user turn quotes it back before the patient's own words.
+        # Nothing but the quote — no patient reply at all.
         {"config": "vietnamese", "disease_slug": "d", "disease_name": "D",
          "conv_id": "conv_0001", "turn": 1, "role": "user",
-         "text_raw": f"> **Bác sĩ Meddies**: {assistant} Chỉ số của tôi là 0.8 ạ."},
+         "text_raw": f"> **Bác sĩ Meddies**: {assistant}"},
     ])
     plan, rejects = build_plan(manifest, _cfg(), _pool(), _NORMALIZERS)
-
-    roles = plan.column("role").to_pylist()
-    assert roles == ["assistant"], "the contaminated user turn must not reach the plan"
-    assert [r["reason"] for r in rejects] == ["assistant_echo"]
-    # The raw text is preserved so the decision is auditable and reversible.
-    assert "Chỉ số của tôi" in rejects[0]["text_raw"]
+    assert sorted(plan.column("role").to_pylist()) == ["assistant", "user"]
+    assert rejects == []
 
 
 def test_build_plan_keeps_a_clean_user_turn():
