@@ -4,9 +4,18 @@ import pytest
 
 from meddies_tts.echo import MIN_ECHO_CHARS, strip_assistant_echo
 
+# Fixtures must exceed MIN_ECHO_CHARS in CANONICAL length, so they are drawn at
+# realistic turn length rather than trimmed to a line.
 _ASSISTANT = (
     "Cảm ơn anh Tài đã chia sẻ. Tôi hiểu anh đang lo lắng về kết quả AMH thấp "
-    "và ảnh hưởng đến kế hoạch sinh con của hai vợ chồng."
+    "và ảnh hưởng đến kế hoạch sinh con của hai vợ chồng. Anh có thể cho tôi biết "
+    "kết quả AMH cụ thể là bao nhiêu không? Và bác sĩ đã tư vấn gì thêm cho anh "
+    "khi khám lần đó?"
+)
+_OTHER_ASSISTANT = (
+    "Về chế độ dinh dưỡng, anh nên bổ sung kẽm và vitamin E hàng ngày, hạn chế "
+    "rượu bia và thuốc lá, ngủ đủ giấc và tập thể dục đều đặn mỗi tuần để cải "
+    "thiện chất lượng tinh trùng trong ba tháng tới."
 )
 _REPLY = (
     "Tôi đi khám ở bệnh viện phụ sản gần nhà, bác sĩ bảo chỉ số AMH của tôi là 0.8 ng/ml."
@@ -37,7 +46,8 @@ def test_matches_through_markup_the_single_line_corpus_leaves_behind():
 
 def test_matches_despite_a_partial_quote():
     """Some turns quote only the opening of the assistant message."""
-    half = _ASSISTANT[: len(_ASSISTANT) // 2]
+    # Must still exceed MIN_ECHO_CHARS; a shorter partial is deliberately ignored.
+    half = _ASSISTANT[: int(len(_ASSISTANT) * 0.8)]
     user = f"> {half} {_REPLY}"
     assert strip_assistant_echo(user, _ASSISTANT) == _REPLY
 
@@ -54,7 +64,11 @@ def test_does_not_strip_on_a_short_shared_phrase():
 
 def test_keeps_substantial_text_that_precedes_the_quote():
     """Only a bare speaker label is dropped from the head, not real content."""
-    before = "Tôi xin phép hỏi lại về điều bác sĩ vừa nói ở trên với tôi hôm nay nhé."
+    before = (
+        "Tôi xin phép hỏi lại về điều bác sĩ vừa nói ở trên với tôi hôm nay nhé, "
+        "vì tôi nghe chưa rõ lắm và muốn ghi lại cho vợ tôi cùng biết để tiện theo "
+        "dõi tình hình sức khoẻ của tôi trong thời gian sắp tới ạ."
+    )
     assert len(before) > MIN_ECHO_CHARS
     user = f"{before} > {_ASSISTANT} {_REPLY}"
     out = strip_assistant_echo(user, _ASSISTANT)
@@ -65,3 +79,101 @@ def test_keeps_substantial_text_that_precedes_the_quote():
 def test_empty_inputs_are_returned_unchanged():
     assert strip_assistant_echo("", _ASSISTANT) == ""
     assert strip_assistant_echo(_REPLY, "") == _REPLY
+    assert strip_assistant_echo(_REPLY, []) == _REPLY
+
+
+# --- matching across the whole conversation, not just the sibling turn --------
+
+def test_finds_a_quote_from_a_different_turn():
+    """1.68 of 3.60 percentage points of contamination come from another turn.
+
+    Comparing only against the same-turn assistant sibling misses nearly half of
+    the problem, so the caller passes every assistant turn in the conversation.
+    """
+    user = f"> **Bác sĩ Meddies**: {_OTHER_ASSISTANT} {_REPLY}"
+    assert strip_assistant_echo(user, [_ASSISTANT, _OTHER_ASSISTANT]) == _REPLY
+
+
+def test_picks_the_longest_match_when_several_turns_overlap():
+    """A contaminated file often shares a greeting with several turns.
+
+    Stripping on the first match rather than the longest would leave most of the
+    quoted turn in place.
+    """
+    user = f"{_ASSISTANT} {_OTHER_ASSISTANT} {_REPLY}"
+    out = strip_assistant_echo(user, [_ASSISTANT, _OTHER_ASSISTANT])
+    assert _OTHER_ASSISTANT not in out
+
+
+def test_a_short_match_below_the_floor_is_left_alone():
+    """The 40-150 char valley is ~50/50 contaminated vs genuine patient speech.
+
+    Sampled cases include real patient turns a LATER assistant message quotes
+    back verbatim, at 100% coverage -- structurally identical to contamination.
+    Stripping there would delete real speech, so the floor deliberately excludes it.
+    """
+    short_patient_turn = "Em chào bác sĩ ạ. Dạo gần đây em có hiện tượng ra máu khi xuất tinh."
+    assistant_quoting_them = (
+        f"Cảm ơn em đã chia sẻ. Em nói rằng: {short_patient_turn} "
+        "Tôi hiểu điều này khiến em hoang mang, và tôi sẽ giải thích rõ nguyên nhân."
+    )
+    assert strip_assistant_echo(short_patient_turn, [assistant_quoting_them]) == short_patient_turn
+
+
+def test_a_single_string_is_still_accepted():
+    user = f"> {_ASSISTANT} {_REPLY}"
+    assert strip_assistant_echo(user, _ASSISTANT) == _REPLY
+
+
+# --- plan-level behaviour: detect and reject, do not repair -------------------
+
+def test_build_plan_rejects_a_user_turn_carrying_a_quoted_assistant_turn():
+    """Contaminated user turns are dropped, not salvaged.
+
+    The salvaged remainder is usually still not patient speech: of 6 sampled,
+    5 were the doctor talking or leaked reasoning, and one was cut mid-word.
+    """
+    import pyarrow as pa
+
+    from meddies_tts.plan import build_plan
+    from tests.tts.test_plan import _cfg, _pool, _NORMALIZERS
+
+    assistant = (
+        "Cảm ơn anh đã chia sẻ. Tôi hiểu anh đang lo lắng về kết quả xét nghiệm "
+        "và ảnh hưởng của nó đến kế hoạch điều trị sắp tới của gia đình mình. "
+        "Anh có thể cho tôi biết chỉ số cụ thể là bao nhiêu không ạ?"
+    )
+    manifest = pa.Table.from_pylist([
+        {"config": "vietnamese", "disease_slug": "d", "disease_name": "D",
+         "conv_id": "conv_0001", "turn": 1, "role": "assistant", "text_raw": assistant},
+        # The user turn quotes it back before the patient's own words.
+        {"config": "vietnamese", "disease_slug": "d", "disease_name": "D",
+         "conv_id": "conv_0001", "turn": 1, "role": "user",
+         "text_raw": f"> **Bác sĩ Meddies**: {assistant} Chỉ số của tôi là 0.8 ạ."},
+    ])
+    plan, rejects = build_plan(manifest, _cfg(), _pool(), _NORMALIZERS)
+
+    roles = plan.column("role").to_pylist()
+    assert roles == ["assistant"], "the contaminated user turn must not reach the plan"
+    assert [r["reason"] for r in rejects] == ["assistant_echo"]
+    # The raw text is preserved so the decision is auditable and reversible.
+    assert "Chỉ số của tôi" in rejects[0]["text_raw"]
+
+
+def test_build_plan_keeps_a_clean_user_turn():
+    import pyarrow as pa
+
+    from meddies_tts.plan import build_plan
+    from tests.tts.test_plan import _cfg, _pool, _NORMALIZERS
+
+    manifest = pa.Table.from_pylist([
+        {"config": "vietnamese", "disease_slug": "d", "disease_name": "D",
+         "conv_id": "conv_0001", "turn": 1, "role": "assistant",
+         "text_raw": "Chào anh, anh thấy trong người thế nào ạ?"},
+        {"config": "vietnamese", "disease_slug": "d", "disease_name": "D",
+         "conv_id": "conv_0001", "turn": 1, "role": "user",
+         "text_raw": "Tôi bị đau bụng ba ngày nay, kèm theo sốt nhẹ về chiều."},
+    ])
+    plan, rejects = build_plan(manifest, _cfg(), _pool(), _NORMALIZERS)
+    assert sorted(plan.column("role").to_pylist()) == ["assistant", "user"]
+    assert rejects == []

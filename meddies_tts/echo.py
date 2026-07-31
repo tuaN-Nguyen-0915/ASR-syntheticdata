@@ -1,21 +1,40 @@
-"""Remove the assistant turn that the corpus copies into user.txt.
+"""Remove assistant turns that the corpus copies into user.txt.
 
-Many user.txt files quote the assistant's whole message back before the patient's
-actual reply:
+The generator frequently writes assistant content into a patient's file:
 
     (internal_reasoning) ... </internal_reasoning>
-    > **Bác sĩ Meddies**: <the entire assistant turn, verbatim>
+    > **Bác sĩ Meddies**: <an entire assistant turn, verbatim>
     Tôi đi khám ở bệnh viện phụ sản gần nhà, ...
 
 Synthesizing that unedited puts the doctor's words in the patient's voice.
-Measured over 19,709 turn pairs: 2.26% are ENTIRELY the echo with no reply at
-all, and a further 0.42% are echo followed by a real reply.
+Measured over 29,965 user.txt files, comparing each against EVERY assistant turn
+in its conversation:
 
-Matching is done on a canonical form -- letters, digits and single spaces -- for
-two reasons. The corpus is stored as one long line, so line-anchored markdown
-rules barely fire and stray '>' and '*' survive into the text. And the two files
-are normalized by DIFFERENT speakers' dialects, so "0.8" becomes "không phẩy tám"
-in one and could differ in the other; comparing before verbalization sidesteps it.
+    same-turn assistant       1.92%
+    next-turn assistant       1.46%
+    distant assistant turn    0.13%
+    previous-turn assistant   0.09%
+    -------------------------------
+                              3.60%
+
+The leak is one-directional. An earlier scan appeared to show assistant.txt
+quoting user.txt at 2.04%, but those "user" files were themselves full of
+assistant content, so the match was the doctor's own words found twice.
+
+Matching runs on a canonical letters/digits form rather than verbatim text:
+the corpus files contain ZERO newlines, so line-anchored markdown rules barely
+fire and stray '>' and '**' survive; and user and assistant are normalized under
+different speakers' number dialects, so "0.8" verbalizes differently in each.
+
+MIN_ECHO_CHARS is 150 and that floor is load-bearing. The match-length
+distribution is bimodal -- a noise spike below 40 chars, a valley from 40 to 150
+holding ~160 files, then the real population above 150. Sampling the valley found
+it is ~50/50: half are contaminated, half are genuine short patient turns that a
+later assistant turn quotes back ("Em chào bác sĩ ạ. Dạo gần đây em có hiện
+tượng ra máu khi xuất tinh..." appears in the next assistant message because the
+doctor repeats the question). No structural signal separates the two at that
+length -- coverage is 100% for both -- so the valley is deliberately left alone.
+Keeping a contaminated utterance is recoverable; deleting real speech is not.
 """
 
 from __future__ import annotations
@@ -27,9 +46,9 @@ from meddies_tts.textprep import strip_markup, strip_reasoning
 _NOISE = re.compile(r"[^0-9a-zà-ỹA-ZÀ-Ỹ\s]+")
 _SPACES = re.compile(r"\s+")
 
-# Below this many characters, a "match" is likely an ordinary shared phrase
-# (a greeting, the clinic name) rather than a quoted turn.
-MIN_ECHO_CHARS = 40
+# Floor for treating a match as a quoted turn. See the module docstring: below
+# this, contaminated and genuine utterances are indistinguishable.
+MIN_ECHO_CHARS = 150
 
 
 def _canonical(text: str) -> tuple[str, list[int]]:
@@ -52,47 +71,79 @@ def _canonical(text: str) -> tuple[str, list[int]]:
     return "".join(out), index
 
 
-def strip_assistant_echo(user_text: str, assistant_text: str) -> str:
-    """Drop the quoted assistant turn from a user utterance.
+def _longest_prefix_in(needle: str, haystack: str) -> int:
+    """Length of the longest prefix of needle that occurs in haystack."""
+    lo, hi, best = MIN_ECHO_CHARS, len(needle), 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if needle[:mid] in haystack:
+            best, lo = mid, mid + 1
+        else:
+            hi = mid - 1
+    return best
 
-    Returns whatever the patient actually said. If the utterance is nothing but
-    the echo, returns "" -- the caller rejects it rather than synthesizing the
-    doctor's words in the patient's voice.
+
+def strip_assistant_echo(user_text: str, assistant_texts: list[str] | str) -> str:
+    """Drop quoted assistant content from a user utterance.
+
+    assistant_texts should be EVERY assistant turn in the conversation, not just
+    the same-turn sibling: 1.68 of the 3.60 percentage points of contamination
+    come from other turns, mostly the next one. A single string is accepted for
+    convenience and treated as a one-element list.
+
+    Returns what the patient actually said, or "" when the utterance is nothing
+    but quoted assistant text -- the caller rejects that rather than synthesizing
+    the doctor's words in the patient's voice.
     """
-    if not user_text or not assistant_text:
+    if isinstance(assistant_texts, str):
+        assistant_texts = [assistant_texts]
+    if not user_text or not assistant_texts:
         return user_text
 
+    # Some files quote more than one turn, so strip repeatedly until nothing
+    # above the floor remains. Bounded by the number of candidate turns, and each
+    # pass strictly shortens the text, so it always terminates.
+    for _ in range(len(assistant_texts)):
+        stripped = _strip_once(user_text, assistant_texts)
+        if stripped == user_text:
+            break
+        user_text = stripped
+        if not user_text:
+            break
+    return user_text
+
+
+def _strip_once(user_text: str, assistant_texts: list[str]) -> str:
+    """Remove the single longest quoted assistant turn, if one is above the floor."""
     canon_user, index = _canonical(user_text)
-    canon_assistant, _ = _canonical(assistant_text)
-    if len(canon_assistant) < MIN_ECHO_CHARS or len(canon_user) < MIN_ECHO_CHARS:
+    if len(canon_user) < MIN_ECHO_CHARS:
         return user_text
 
-    at = canon_user.find(canon_assistant)
-    if at >= 0:
-        end = at + len(canon_assistant)
-    else:
-        # Partial quote: keep the longest prefix of the assistant turn that is
-        # present. Binary search rather than scanning every length.
-        lo, hi, best = MIN_ECHO_CHARS, len(canon_assistant), 0
-        while lo <= hi:
-            mid = (lo + hi) // 2
-            if canon_assistant[:mid] in canon_user:
-                best, lo = mid, mid + 1
-            else:
-                hi = mid - 1
-        if best < MIN_ECHO_CHARS:
-            return user_text
-        at = canon_user.find(canon_assistant[:best])
-        end = at + best
+    # Take the LONGEST match across all turns. A contaminated file often shares a
+    # short greeting with several turns; the longest identifies the real source.
+    best_len, best_at = 0, -1
+    for assistant_text in assistant_texts:
+        canon_assistant, _ = _canonical(assistant_text)
+        if len(canon_assistant) < MIN_ECHO_CHARS:
+            continue
+        if canon_assistant in canon_user:
+            length = len(canon_assistant)
+        else:
+            length = _longest_prefix_in(canon_assistant, canon_user)
+        if length > best_len:
+            best_len = length
+            best_at = canon_user.find(canon_assistant[:length])
 
-    # Map the canonical end position back into the original string.
+    if best_len < MIN_ECHO_CHARS or best_at < 0:
+        return user_text
+
+    end = best_at + best_len
     tail = user_text[index[end]:] if end < len(index) else ""
-    head = user_text[:index[at]] if at < len(index) else ""
+    head = user_text[:index[best_at]] if best_at < len(index) else ""
     # Text before the quote is the reasoning block plus the speaker label the
     # corpus writes ("> **Bác sĩ Meddies**: "), neither of which the patient says.
-    # The reasoning is stripped downstream anyway, so judge the head by what would
-    # SURVIVE that -- otherwise a long reasoning block makes a bare label look like
-    # real content and it gets spoken.
+    # Judge it by what would SURVIVE reasoning-stripping downstream, or a long
+    # reasoning block makes a bare label look like real content and it gets spoken.
     if len(_canonical(strip_markup(strip_reasoning(head)))[0]) < MIN_ECHO_CHARS:
         head = ""
     return _SPACES.sub(" ", f"{head} {tail}").strip()

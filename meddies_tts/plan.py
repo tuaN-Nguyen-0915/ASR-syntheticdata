@@ -76,10 +76,14 @@ def build_plan(
     # The corpus copies the assistant's whole turn into user.txt before the
     # patient's reply, so a user utterance needs its sibling to be cleaned. Built
     # once here rather than re-scanned per row.
-    assistant_text = {
-        (r["config"], r["disease_slug"], r["conv_id"], r["turn"]): r["text_raw"]
-        for r in manifest.to_pylist() if r["role"] == "assistant"
-    }
+    # Keyed by CONVERSATION, not by turn: 1.68 of the 3.60 percentage points of
+    # contamination come from a different turn's assistant message (mostly the
+    # next one), so a same-turn-only comparison misses nearly half of it.
+    assistant_text: dict[tuple, list[str]] = {}
+    for r in manifest.to_pylist():
+        if r["role"] == "assistant":
+            key = (r["config"], r["disease_slug"], r["conv_id"])
+            assistant_text.setdefault(key, []).append(r["text_raw"])
 
     for row in manifest.to_pylist():
         config = row["config"]
@@ -88,11 +92,25 @@ def build_plan(
         path = audio_path(config, row["disease_slug"], row["conv_id"], row["turn"], row["role"])
         text_raw = row["text_raw"]
         if row["role"] == "user":
-            sibling = assistant_text.get(
-                (config, row["disease_slug"], row["conv_id"], row["turn"])
-            )
-            if sibling:
-                text_raw = strip_assistant_echo(text_raw, sibling)
+            turns = assistant_text.get((config, row["disease_slug"], row["conv_id"]))
+            # Detection, not repair. Spot-checking the salvaged remainder showed it
+            # is usually still not patient speech: of 6 sampled, 5 were the doctor
+            # talking or leaked reasoning (22% of all survivors still carry
+            # reasoning markers), and one was cut mid-word. A file carrying a
+            # quoted assistant turn is contaminated throughout, so removing one
+            # quote just exposes the next. Dropping the utterance is 1.56% of the
+            # corpus; the raw text is preserved in rejects.jsonl either way.
+            if turns and strip_assistant_echo(text_raw, turns) != text_raw:
+                rejects.append(
+                    {
+                        "audio_path": path,
+                        "reason": "assistant_echo",
+                        "detail": "user.txt contains a quoted assistant turn "
+                                  f"({len(text_raw)} raw chars)",
+                        "text_raw": text_raw,
+                    }
+                )
+                continue
         rejection = check(text_raw, cfg.text)
         if rejection is not None:
             rejects.append(
