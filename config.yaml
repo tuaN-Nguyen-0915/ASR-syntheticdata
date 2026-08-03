@@ -4,6 +4,18 @@ hf:
   revision: "main"
   token_secret: "huggingface"     # Modal Secret holding HF_TOKEN (write scope)
 
+refs:
+  # Switch by editing source + dir together; app.py mounts both Volumes and every
+  # variant stays uploaded, so flipping back never re-uploads anything.
+  #   visec        source: visec  dir: /refs/visec      147 spk, emotional, no transcripts
+  #   vivos 10s    source: vivos  dir: /refs/vivos/v10   65 spk, read speech, transcripts
+  #   vivos 30s    source: vivos  dir: /refs/vivos/v30   same 65 spk, ~29.6s references
+  # target_seconds must match the dir suffix -- it is what build-refs and the plan
+  # hash use, so a mismatch would silently generate from the wrong variant.
+  source: "vivos"
+  dir: "/refs/vivos/v30"
+  target_seconds: 30
+
 speaker:
   policy: per_conversation        # or per_turn
   pool: all                       # or a path to a file of allowed speaker_ids
@@ -15,7 +27,7 @@ engine:
   max_num_batched_tokens: 16384
   cfg_value: 2.0
   temperature: 1.0
-  inference_timesteps: 24
+  inference_timesteps: 26
   gpu_memory_utilization: 0.94    # more KV-cache headroom for concurrent sequences;
                                    # pilot should sweep this alongside concurrency
 
