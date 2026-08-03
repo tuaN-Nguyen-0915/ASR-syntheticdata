@@ -232,6 +232,76 @@ class Synthesizer:
         except Exception as error:  # noqa: BLE001 - teardown must not raise
             print(f"warning: engine.close() failed during shutdown: {error}")
 
+
+    @modal.method()
+    async def try_text(self, lines: list[str], speaker_id: str) -> list[dict]:
+        """Synthesize ad-hoc lines through the REAL pipeline, returning audio bytes.
+
+        Exists so text can be auditioned without publishing anything. It reuses
+        normalizer_for and run_shard rather than reimplementing them: a harness
+        with its own normalization would let you tune against text the pipeline
+        never actually produces.
+
+        Each line becomes a one-utterance "plan row" with the same shape build_plan
+        emits, so chunking, per-chunk seeding, joining, loudness matching, QC and
+        the reseeded retry all behave exactly as they do in a real shard.
+        """
+        from meddies_tts.plan import audio_path, normalizer_for
+        from meddies_tts.runner import run_shard as run
+
+        if speaker_id not in self.refs:
+            return [{"error": f"unknown speaker_id {speaker_id!r}; "
+                              f"pool has {len(self.refs)} speakers"}]
+
+        config = self.cfg.run.configs[0]
+        normalizer = normalizer_for(self.cfg, config, speaker_id)
+        rows, skipped = [], []
+        for index, line in enumerate(lines):
+            spoken = normalizer.normalize(line)
+            if not spoken:
+                skipped.append({"index": index, "text_raw": line,
+                                "error": "normalized to nothing"})
+                continue
+            rows.append({
+                "config": config, "disease_slug": "try", "disease_name": "try",
+                "conv_id": "try", "turn": index + 1, "role": "user",
+                "text_raw": line, "text_spoken": spoken,
+                "speaker_id": speaker_id, "speaker_source": self.cfg.refs.source,
+                "speaker_emotions": "", "speaker_gender": "",
+                "speaker_unique_source_s": 0.0,
+                "audio_path": audio_path(config, "try", "try", index + 1, "user"),
+                "shard_id": "try",
+            })
+        if not rows:
+            return skipped
+
+        built, result = await run(
+            "try", rows, self.engine, self.refs, self.cfg,
+            chars_per_sec=self.cfg.text.chars_per_sec,
+        )
+        by_path = {r["audio_path"]: r for r in rows}
+        out = []
+        for row in built:
+            src = by_path[row["audio"]["path"]]
+            out.append({
+                "index": src["turn"] - 1,
+                "text_raw": src["text_raw"],
+                "text_spoken": src["text_spoken"],
+                "audio": row["audio"]["bytes"],
+                "duration_s": row["duration_s"],
+                "n_chunks": row["n_chunks"],
+                "seed": row["seed"],
+            })
+        # Utterances QC rejected never reach `built`; report them rather than
+        # silently returning fewer files than lines given.
+        done = {r["index"] for r in out}
+        for failure in result.failures:
+            index = int(failure["audio_path"].rsplit("/Turn", 1)[1].split("/")[0]) - 1
+            if index not in done:
+                skipped.append({"index": index, "error": failure["reason"],
+                                "detail": failure.get("detail", "")})
+        return out + skipped
+
     @modal.method()
     async def run_shard(self, shard_id: str, repo_path: str, expected_plan_hash: str) -> dict:
         """Synthesize one shard, write it to Parquet, upload it, then delete the local copy.
@@ -447,3 +517,58 @@ def main(shards: str = "remaining", config_path: str = "config.yaml",
     print(f"done: {total_audio / 3600:.2f} h of audio generated | {total} shard(s): {summary}")
     if counts.get("ok", 0) != total:
         sys.exit(1)
+
+@app.local_entrypoint()
+def try_text(
+    text_file: str,
+    speaker: str,
+    out_dir: str = "pilot/try_out",
+    config_path: str = "pilot/pilot.yaml",
+) -> None:
+    """Audition ad-hoc lines locally: nothing is uploaded, audio lands on disk.
+
+        modal run app.py::try_text --text-file lines.txt --speaker VIVOSSPK22
+
+    Blank lines and lines starting with '#' are skipped, so the input file can
+    carry comments. Reuses the same Synthesizer as a real run, so a second call
+    within scaledown_window lands on the warm container and skips the ~90s of
+    model load and reference encoding.
+    """
+    import json
+    from pathlib import Path as P
+
+    lines = [
+        line.strip()
+        for line in P(text_file).read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not lines:
+        print(f"no usable lines in {text_file}")
+        return
+    print(f"{len(lines)} line(s) -> speaker {speaker}  (config {config_path})")
+
+    results = Synthesizer().try_text.remote(lines, speaker)
+
+    out = P(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    report = []
+    ok = 0
+    for item in sorted(results, key=lambda r: r.get("index", 0)):
+        index = item.get("index", 0)
+        if "audio" in item:
+            # FLAC, matching exactly what a published shard stores -- auditioning
+            # a WAV would not be the artifact the dataset actually ships.
+            name = f"{index + 1:02d}.flac"
+            (out / name).write_bytes(item["audio"])
+            ok += 1
+            print(f"  [{index + 1:02d}] {item['duration_s']:5.1f}s  "
+                  f"{item['n_chunks']:>2} chunk(s)  -> {name}")
+            print(f"       spoken: {item['text_spoken'][:88]}")
+            report.append({k: v for k, v in item.items() if k != "audio"} | {"file": name})
+        else:
+            print(f"  [{index + 1:02d}] SKIPPED: {item.get('error')} {item.get('detail','')}")
+            report.append(item)
+    (out / "report.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print()
+    print(f"{ok}/{len(lines)} written to {out}/  (report.json has raw vs spoken text)")

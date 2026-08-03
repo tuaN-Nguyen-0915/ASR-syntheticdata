@@ -57,6 +57,18 @@ def audio_path(config: str, disease_slug: str, conv_id: str, turn: int, role: st
     return f"{config}/{disease_slug}/{conv_id}/Turn{turn}/{role}.flac"
 
 
+def normalizer_for(cfg: Config, config: str, speaker_id: str):
+    """Return the normalizer a given speaker gets, dialect included.
+
+    Vietnamese number words vary by region (linh/nghìn vs lẻ/ngàn, tư vs bốn) and
+    each speaker is pinned to one dialect derived from their id plus the run salt.
+    Extracted so ad-hoc callers normalize exactly as build_plan does -- a harness
+    with its own copy of this would quietly test text the pipeline never produces.
+    """
+    dialect = dialect_from_seed(derive_seed(cfg.speaker.seed_salt, "dialect", speaker_id))
+    return get_normalizer(config, dialect)
+
+
 def build_plan(
     manifest: pa.Table,
     cfg: Config,
@@ -125,12 +137,7 @@ def build_plan(
 
         key = (config, speaker_id)
         if key not in cache:
-            # Dialect is derived deterministically from the speaker id (plus the
-            # run's salt), so the same speaker always gets the same dialect.
-            dialect = dialect_from_seed(
-                derive_seed(cfg.speaker.seed_salt, "dialect", speaker_id)
-            )
-            cache[key] = get_normalizer(config, dialect)
+            cache[key] = normalizer_for(cfg, config, speaker_id)
         spoken = cache[key].normalize(text_raw)
         if not spoken:
             # Normalization can legitimately reduce text to nothing (e.g. an
