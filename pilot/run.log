@@ -1,5 +1,5 @@
 ✓ Initialized. View run at 
-https://modal.com/apps/tuan-phannguyen1509/main/ap-uHa4GwFOlmpRgavlcTZL75
+https://modal.com/apps/tuan-phannguyen1509/main/ap-BMyvrCOCxql6PSqthSm7KD
 ✓ Created objects.
 ├── 🔨 Created mount 
 │   /Users/phananhtuannguyen/Desktop/Project/ASR-syntheticdata/.claude/worktrees
@@ -15,148 +15,108 @@ dispatching 1 shard(s) to A100-40GB
 /usr/local/lib/python3.11/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
   WeightNorm.apply(module, name, dim)
 ready: engine=nanovllm-voxcpm/2.0.3 refs=65 source=vivos sample_rate=48000
-W0731 07:08:54.626000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] torch._dynamo hit config.recompile_limit (8)
-W0731 07:08:54.626000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8]    function: 'snake' (/usr/local/lib/python3.11/site-packages/nanovllm_voxcpm/layers/audio_vae_v2.py:48)
-W0731 07:08:54.626000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8]    last reason: 1/7: tensor 'x' size mismatch at index 1. expected 1024, actual 512
-W0731 07:08:54.626000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
-W0731 07:08:54.626000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
-W0731 07:09:39.115000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
-W0731 07:09:39.115000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'forward' (/usr/local/lib/python3.11/site-packages/nanovllm_voxcpm/layers/activation.py:11)
-W0731 07:09:39.115000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 3, actual 2
-W0731 07:09:39.115000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
-W0731 07:09:39.115000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+W0803 04:00:00.052000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] torch._dynamo hit config.recompile_limit (8)
+W0803 04:00:00.052000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8]    function: 'snake' (/usr/local/lib/python3.11/site-packages/nanovllm_voxcpm/layers/audio_vae_v2.py:48)
+W0803 04:00:00.052000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8]    last reason: 1/7: tensor 'x' size mismatch at index 1. expected 1024, actual 512
+W0803 04:00:00.052000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W0803 04:00:00.052000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [1/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+W0803 04:00:39.839000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+W0803 04:00:39.839000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'forward' (/usr/local/lib/python3.11/site-packages/nanovllm_voxcpm/layers/activation.py:11)
+W0803 04:00:39.839000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 3, actual 2
+W0803 04:00:39.839000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W0803 04:00:39.839000 11 site-packages/torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
 
 [1AProcessing Files (0 / 0)      : |          |  0.00B /  0.00B            
 
 [1ANew Data Upload               : |          |  0.00B /  0.00B            [A
 
 
-[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 25.6MB            [A[A
+[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 26.1MB            [A[A
 
 
-[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 25.6MB            [A[A
-[1AProcessing Files (0 / 1)      :   0%|          | 12.2kB / 25.6MB, 1.20kB/s  
+[1A  /tmp/vi-00000.parquet       :   0%|          | 12.2kB / 26.1MB            [A[A
+[1AProcessing Files (0 / 1)      :   0%|          | 12.2kB / 26.1MB,   ???B/s  
 
 
-[1A
-[1A  /tmp/vi-00000.parquet       :   2%|▏         |  537kB / 25.6MB            [A[A
-[1AProcessing Files (0 / 1)      :   2%|▏         |  537kB / 25.6MB, 52.7kB/s  
+[1A  /tmp/vi-00000.parquet       :   2%|▏         |  537kB / 26.1MB            [A[A
+[1AProcessing Files (0 / 1)      :   2%|▏         |  537kB / 26.1MB,   ???B/s  
 
-[1ANew Data Upload               :   2%|▏         |  525kB / 25.6MB, 51.6kB/s  [A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :   2%|▏         |  537kB / 25.6MB            [A[A
+[1ANew Data Upload               :   2%|▏         |  525kB / 26.1MB,   ???B/s  [A
 
 
-[1A  /tmp/vi-00000.parquet       :   2%|▏         |  537kB / 25.6MB            [A[A
+[1A  /tmp/vi-00000.parquet       :   6%|▌         | 1.59MB / 26.1MB            [A[A
+[1AProcessing Files (0 / 1)      :   6%|▌         | 1.59MB / 26.1MB,  157kB/s  
 
-
-[1A  /tmp/vi-00000.parquet       :   2%|▏         |  537kB / 25.6MB            [A[A
-
-
-[1A  /tmp/vi-00000.parquet       :   6%|▌         | 1.59MB / 25.6MB            [A[A
-[1AProcessing Files (0 / 1)      :   6%|▌         | 1.59MB / 25.6MB,  153kB/s  
-
-[1A
-[1ANew Data Upload               :   6%|▌         | 1.58MB / 25.6MB,  151kB/s  [A
+[1ANew Data Upload               :   6%|▌         | 1.58MB / 26.1MB,  156kB/s  [A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :  10%|█         | 2.64MB / 25.6MB            [A[A
-[1AProcessing Files (0 / 1)      :  10%|█         | 2.64MB / 25.6MB,  253kB/s  
+[1A  /tmp/vi-00000.parquet       :  30%|███       | 7.89MB / 26.1MB            [A[A
+[1AProcessing Files (0 / 1)      :  30%|███       | 7.89MB / 26.1MB,  778kB/s  
 
-[1ANew Data Upload               :  10%|█         | 2.63MB / 25.6MB,  252kB/s  [A
+[1A
+[1ANew Data Upload               :  30%|███       | 7.88MB / 26.1MB,  777kB/s  [A
+
+
+[1A  /tmp/vi-00000.parquet       :  50%|█████     | 13.1MB / 26.1MB            [A[A
+[1AProcessing Files (0 / 1)      :  50%|█████     | 13.1MB / 26.1MB, 1.29MB/s  
+
+[1A
+[1ANew Data Upload               :  50%|█████     | 13.1MB / 26.1MB, 1.29MB/s  [A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       :  23%|██▎       | 5.79MB / 25.6MB            [A[A
-[1AProcessing Files (0 / 1)      :  23%|██▎       | 5.79MB / 25.6MB,  554kB/s  
-
-[1ANew Data Upload               :  23%|██▎       | 5.78MB / 25.6MB,  553kB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :  49%|████▉     | 12.6MB / 25.6MB            [A[A
-[1AProcessing Files (0 / 1)      :  49%|████▉     | 12.6MB / 25.6MB, 1.21MB/s  
+[1A  /tmp/vi-00000.parquet       :  66%|██████▋   | 17.3MB / 26.1MB            [A[A
+[1AProcessing Files (0 / 1)      :  66%|██████▋   | 17.3MB / 26.1MB, 1.69MB/s  
 
 [1A
-[1ANew Data Upload               :  49%|████▉     | 12.6MB / 25.6MB, 1.20MB/s  [A
+[1ANew Data Upload               :  66%|██████▋   | 17.3MB / 26.1MB, 1.69MB/s  [A
 
 
-[1A
-[1A  /tmp/vi-00000.parquet       :  66%|██████▌   | 16.8MB / 25.6MB            [A[A
-[1AProcessing Files (0 / 1)      :  66%|██████▌   | 16.8MB / 25.6MB, 1.60MB/s  
+[1A  /tmp/vi-00000.parquet       :  81%|████████  | 21.0MB / 26.1MB            [A[A
+[1AProcessing Files (0 / 1)      :  81%|████████  | 21.0MB / 26.1MB, 2.03MB/s  
 
-[1A
-[1ANew Data Upload               :  66%|██████▌   | 16.8MB / 25.6MB, 1.60MB/s  [A
+[1ANew Data Upload               :  81%|████████  | 21.0MB / 26.1MB, 2.03MB/s  [A
 
 
-[1A
-[1A  /tmp/vi-00000.parquet       :  80%|███████▉  | 20.5MB / 25.6MB            [A[A
-[1AProcessing Files (0 / 1)      :  80%|███████▉  | 20.5MB / 25.6MB, 1.93MB/s  
+[1A  /tmp/vi-00000.parquet       :  97%|█████████▋| 25.2MB / 26.1MB            [A[A
+[1AProcessing Files (0 / 1)      :  97%|█████████▋| 25.2MB / 26.1MB, 2.42MB/s  
 
-[1ANew Data Upload               :  80%|███████▉  | 20.5MB / 25.6MB, 1.93MB/s  [A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       :  96%|█████████▋| 24.7MB / 25.6MB            [A[A
-[1AProcessing Files (0 / 1)      :  96%|█████████▋| 24.7MB / 25.6MB, 2.32MB/s  
-
-[1ANew Data Upload               :  96%|█████████▋| 24.7MB / 25.6MB, 2.31MB/s  [A
+[1ANew Data Upload               :  97%|█████████▋| 25.2MB / 26.1MB, 2.42MB/s  [A
 
 
-[1A  /tmp/vi-00000.parquet       :  98%|█████████▊| 25.2MB / 25.6MB            [A[A
-[1AProcessing Files (0 / 1)      :  98%|█████████▊| 25.2MB / 25.6MB, 2.34MB/s  
+[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 25.7MB / 26.1MB            [A[A
+[1AProcessing Files (0 / 1)      :  99%|█████████▊| 25.7MB / 26.1MB, 2.45MB/s  
 
-[1ANew Data Upload               :  98%|█████████▊| 25.2MB / 25.6MB, 2.34MB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       :  98%|█████████▊| 25.2MB / 25.6MB            [A[A
+[1ANew Data Upload               :  99%|█████████▊| 25.7MB / 26.1MB, 2.45MB/s  [A
 
 
-[1A  /tmp/vi-00000.parquet       :  98%|█████████▊| 25.2MB / 25.6MB            [A[A
-
-
-[1A  /tmp/vi-00000.parquet       :  98%|█████████▊| 25.2MB / 25.6MB            [A[A
-
-
-[1A  /tmp/vi-00000.parquet       :  98%|█████████▊| 25.2MB / 25.6MB            [A[A
+[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 25.7MB / 26.1MB            [A[A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 25.6MB / 25.6MB            [A[A
-[1AProcessing Files (1 / 1)      : 100%|██████████| 25.6MB / 25.6MB, 2.27MB/s  
-
-[1A
-[1ANew Data Upload               : 100%|██████████| 25.6MB / 25.6MB, 2.27MB/s  [A
-
-
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 25.6MB / 25.6MB            [A[A
+[1A  /tmp/vi-00000.parquet       :  99%|█████████▊| 25.7MB / 26.1MB            [A[A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 25.6MB / 25.6MB            [A[A
+[1A  /tmp/vi-00000.parquet       : 100%|██████████| 26.1MB / 26.1MB            [A[A
+[1AProcessing Files (1 / 1)      : 100%|██████████| 26.1MB / 26.1MB, 2.41MB/s  
+
+[1ANew Data Upload               : 100%|██████████| 26.1MB / 26.1MB, 2.41MB/s  [A
+
+
+[1A  /tmp/vi-00000.parquet       : 100%|██████████| 26.1MB / 26.1MB            [A[A
 
 
 [1A
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 25.6MB / 25.6MB            [A[A
+[1A  /tmp/vi-00000.parquet       : 100%|██████████| 26.1MB / 26.1MB            [A[A
 
 
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 25.6MB / 25.6MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 25.6MB / 25.6MB            [A[A
-
-
-[1A
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 25.6MB / 25.6MB            [A[A
-[1AProcessing Files (1 / 1)      : 100%|██████████| 25.6MB / 25.6MB, 2.16MB/s  
-New Data Upload               : 100%|██████████| 25.6MB / 25.6MB, 2.16MB/s  
-
-[1A  /tmp/vi-00000.parquet       : 100%|██████████| 25.6MB / 25.6MB            
-an error occurred during closing of asynchronous generator <async_generator object Synchronizer._run_generator_async at 0x118e1a770>
-asyncgen: <async_generator object Synchronizer._run_generator_async at 0x118e1a770>
+[1A  /tmp/vi-00000.parquet       : 100%|██████████| 26.1MB / 26.1MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 26.1MB / 26.1MB, 2.35MB/s  
+New Data Upload               : 100%|██████████| 26.1MB / 26.1MB, 2.35MB/s  
+  /tmp/vi-00000.parquet       : 100%|██████████| 26.1MB / 26.1MB            
+an error occurred during closing of asynchronous generator <async_generator object Synchronizer._run_generator_async at 0x11d23e770>
+asyncgen: <async_generator object Synchronizer._run_generator_async at 0x11d23e770>
 Traceback (most recent call last):
   File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/modal/_utils/async_utils.py", line 839, in __iter__
     yield from run_async_gen(runner, self._async_iterable)
@@ -165,8 +125,8 @@ GeneratorExit
 During handling of the above exception, another exception occurred:
 
 RuntimeError: aclose(): asynchronous generator is already running
-an error occurred during closing of asynchronous generator <async_generator object async_merge at 0x118e025a0>
-asyncgen: <async_generator object async_merge at 0x118e025a0>
+an error occurred during closing of asynchronous generator <async_generator object async_merge at 0x11d2265a0>
+asyncgen: <async_generator object async_merge at 0x11d2265a0>
 Traceback (most recent call last):
   File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/modal/_utils/async_utils.py", line 839, in __iter__
     yield from run_async_gen(runner, self._async_iterable)
@@ -176,10 +136,10 @@ During handling of the above exception, another exception occurred:
 
 RuntimeError: aclose(): asynchronous generator is already running
 Task was destroyed but it is pending!
-task: <Task pending name='Task-1541' coro=<<async_generator_athrow without __name__>()> wait_for=<Future finished result=None>>
-{"shard_id": "vi-00000", "status": "ok", "utterances": 54, "failed": 0, "audio_seconds": 1463.6599999999996, "wall_seconds": 241.61370611190796, "rtf": 0.16507502159784923, "failures": []}
-done: 0.41 h of audio generated | 1 shard(s): ok=1
+task: <Task pending name='Task-1389' coro=<<async_generator_athrow without __name__>()> wait_for=<Future finished result=None>>
+{"shard_id": "vi-00000", "status": "ok", "utterances": 54, "failed": 0, "audio_seconds": 1497.9, "wall_seconds": 209.7606794834137, "rtf": 0.140036504094675, "failures": []}
+done: 0.42 h of audio generated | 1 shard(s): ok=1
 Stopping app - local entrypoint completed.
 Runner terminated.
 ✓ App completed. View run at 
-https://modal.com/apps/tuan-phannguyen1509/main/ap-uHa4GwFOlmpRgavlcTZL75
+https://modal.com/apps/tuan-phannguyen1509/main/ap-BMyvrCOCxql6PSqthSm7KD
