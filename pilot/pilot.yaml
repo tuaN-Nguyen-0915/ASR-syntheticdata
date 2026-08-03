@@ -25,7 +25,7 @@ engine:
   gpu_memory_utilization: 0.94
   cfg_value: 2.0
   temperature: 1.0
-  inference_timesteps: 30
+  inference_timesteps: 26
 text:
   chunk_max_chars: 130
   chunk_overflow_chars: 14
