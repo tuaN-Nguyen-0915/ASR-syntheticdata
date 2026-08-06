@@ -202,6 +202,100 @@ text to speak.
 
 ---
 
+---
+
+## 7. Edge cases found by full-corpus scan
+
+`scripts/scan_edge_cases.py` normalized **all 712,881 Vietnamese files** (26 min,
+0 errors) and collected every token that survives unverbalized — i.e. everything
+the TTS model has to guess at. Counts below are whole-corpus, not sampled.
+
+### Reproducible rule gaps
+
+Each row was re-run through the normalizer to confirm; none is theoretical.
+
+| input | current output | should be | corpus count |
+|---|---|---|---|
+| `Chiếm 5-10% dân số.` | `năm đến mười**%**` | …mười **phần trăm** | `%` survives 1,586× |
+| `Góc 45°.` | `bốn mươi lăm**°**` | …lăm **độ** | `°` survives 449× |
+| `Sốt ≥ 38°C.` | `**≥** ba mươi tám độ C` | **từ** … **trở lên** | `≥`/`≤` 140× |
+| `Thực phẩm giàu omega-3` | unchanged | omega **ba** | ~741× |
+| `Ngủ lúc 11h30 tối.` | `mười một **giờ30**` | …giờ **ba mươi** | `giờ<dd>` 180× |
+| `Chi phí 500k-1 triệu.` | `**500k-một** triệu` | năm trăm nghìn đến một triệu | `500k-` 31× |
+
+**Why each fails.** The range rule consumes `5-10` before the percent rule sees
+it, stranding `%`. The degree rule requires a following `C`, so a bare `°` is
+missed. Only `>` and `<` are handled — `≥` and `≤` were never added. `omega-3` is
+word-hyphen-digit, which no range rule matches. `11h30` converts `h`→`giờ` but
+leaves the minutes. `500k` has no rule at all, and the range rule half-fires
+across it.
+
+The last shape is the worst: **partial verbalization produces mixed
+digit/word tokens** — `500k-một`, `tục1-hai`, `1chín` (68 occurrences combined) —
+which no downstream check catches.
+
+### Residual symbols — 884,982 occurrences
+
+| symbol | count | note |
+|---|---|---|
+| `(` `)` | **737,684** | never dropped; the model decides what a bracket sounds like |
+| `-` | 83,120 | compounds kept deliberately, plus strays |
+| `。` `，` `：` | 16,884 | **CJK fullwidth punctuation** |
+| `✅ ✓ ❌ ⚠` | 9,058 | checkmarks in summary lists |
+| `→` | 6,751 | reads as "leads to" in clinical reasoning |
+| `+` | 6,581 | |
+| `/` | 5,355 | slashes the word/period rules did not match |
+| `😊 💙 🌟 🙏 👋` | 2,852 | emoji |
+| `%` `°` `≥` `$` `~` `=` `&` `;` `_` `'` | ~10,000 | see gaps above |
+| `�` | 908 | encoding damage in the source |
+
+Parentheses alone outnumber every other symbol combined. They are not in
+`clean_punctuation`'s drop set.
+
+### Acronyms — 135,907 occurrences, 400+ distinct
+
+| category | examples (with counts) |
+|---|---|
+| dominant | `AI` 67,322 — from "trợ lý AI" in nearly every opening turn |
+| imaging / labs | `MRI` 6,860 · `ECG` 2,970 · `CT` 2,299 · `TSH` 1,434 · `CRP` 623 · `EMG` 524 · `CBC` 514 · `BMI` 391 · `LDL` 371 |
+| conditions | `GERD` 1,526 · `BPPV` 742 · `COPD` 722 · `IBS` 721 · `HPV` 513 · `HTN` 442 · `AMH` 398 · `UTI` 338 |
+| Vietnamese admin | `CCCD` 2,677 · `BHYT` 2,482 · `CMND` 2,462 · `BV` 517 |
+| letter+digit | `HbA1c` 743 · `SpO2` 125 · `CoQ10` · `fT4` · `T3`/`T4` |
+| **reasoning leakage** | `FIFE` 1,975 · `PHASE` 578 · `OPQRST` 526 · `PMH` 390 · `ROS` 390 |
+| **false positives** | `NGAY` 1,879 · `QUAN` 1,357 · `AN` 697 · `KHI` 624 · `NGUY` 595 · `CHO` 486 — Vietnamese words in shouty headers |
+
+**Open question, not a gap.** Nothing currently decides whether `MRI` should be
+read letter-by-letter (`em-rờ-i`), as English (`em-ar-eye`), or expanded. VoxCPM2
+guesses per occurrence, so the same acronym may differ between utterances. A
+lookup table is the fix if consistency matters — this scan is the list to build
+it from.
+
+### Reasoning-leak shapes the stripper misses
+
+The scan surfaced tag families not in `_RNAME`:
+
+```
+</phase_check> <fife_status>Đã thu thập đủ: Triệu chứng (F), Impact (I)…
+Phase: GATHERING INFORMATION (Turn 5) - Moving to PHASE 3: PROVIDING STRUCTURE
+**PHASE 3: PROVIDING STRUCTURE** Trước tiên, Tôi muốn xác nhận…
+```
+
+`phase_check` and `fife_status` are unknown tag names, and the bare English
+scaffolding (`GATHERING INFORMATION`, `PROVIDING STRUCTURE`, `Patient Age`,
+`Objective`) has no tag at all. This is the residual leakage measured at ~0.75%
+of utterances.
+
+### Corpus degeneracy
+
+```
+đi đi đi đi đi đi đi đi.,,,...,,,,,..,.,.,...,,,..,,...,.,,..,,.,.,...,..
+......................,......................。... 。。 。。。。 。 。 。。。 。 。 。 。 。，。 ，，，
+```
+
+Punctuation-spam utterances exist. The `degenerate` reject rule (TTR < 0.35,
+n-gram repeat > 4) is meant to catch these; whether it catches *these particular*
+shapes is untested — the type-token ratio of a comma run may pass.
+
 ## Open questions
 
 - **No text-fidelity check.** QC measures duration ratio only. A word dropped or
@@ -211,3 +305,9 @@ text to speak.
   identifiers (`B12` → `Btwelve`).
 - **Reference transcripts unused.** VIVOS ships them; they would enable VoxCPM2's
   higher-fidelity transcript-assisted cloning.
+- **Six reproducible rule gaps** (§7): `%` after a range, bare `°`, `≥`/`≤`,
+  `omega-3`, `11h30`, `500k`. All produce audible wrong output; none is fixed.
+- **737,684 parentheses** reach the model unhandled.
+- **Acronym pronunciation is undecided** — 135,907 occurrences, no lookup table.
+- **`phase_check` / `fife_status` tags and bare English scaffolding** escape the
+  reasoning stripper.
