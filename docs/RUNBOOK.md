@@ -30,6 +30,11 @@ never during.
 
 ---
 
+Text preprocessing cases — every rule, with real input and output —
+are documented separately in [PREPROCESSING.md](PREPROCESSING.md).
+
+---
+
 ## Infrastructure
 
 **Modal app** `meddies-tts` (`app.py`). One container per shard; the shard is the
