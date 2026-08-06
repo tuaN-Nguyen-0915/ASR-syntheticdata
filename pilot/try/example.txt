@@ -1,7 +1,0 @@
-# One utterance per line. Blank lines and #comments are ignored.
-# Run:  modal run app.py::try_text --text-file pilot/try/example.txt --speaker VIVOSSPK22
-Em sốt 39,5 độ từ chiều qua, người mệt mỏi và đau đầu nhiều.
-Uống Metformin 1000mg/ngày, chia 2 viên 500mg sau ăn.
-Huyết áp của bác là 140/90 mmHg, hơi cao so với bình thường.
-Mức độ đau khoảng 6-7/10, kéo dài 10-15 phút mỗi lần.
-Bác sĩ ơi, tình trạng này có nguy hiểm không ạ?
