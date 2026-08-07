@@ -1,0 +1,401 @@
+acronym	count	suggested_action	proposed_spoken	YOUR_ACTION	YOUR_SPOKEN	context_1
+AI	67322	SPELL				Chào Anh, tôi là Meddies, một trợ lý AI được thiết kế để giúp anh trình bày rõ ràng các vấn đề sức khỏe của mình.
+MRI	6860	SPELL				được: - Thăm khám trực tiếp, test vận động - Bác sĩ sẽ quyết định có cần chụp X-quang hay MRI không - X-quang giúp xem xương và khe khớp, MRI đánh giá sụn, gân,
+ECG	2970	SPELL				sẽ cần làm một số xét nghiệm để loại trừ các nguyên nhân nguy hiểm như: - **Điện tâm đồ (ECG)**: Kiểm tra nhịp tim và hoạt động điện.
+CCCD	2677	EXPAND	căn cước công dân			Khi đi khám, bác chỉ cần: - Mang theo CCCD hoặc giấy tờ tùy thân để đăng ký khám - Nhớ mang theo thẻ bảo hiểm y tế nếu có - Ghi lại các triệu chứng bác
+BHYT	2482	EXPAND	bảo hiểm y tế			m máu cơ bản sẽ hợp lý hơn nhiều so với phòng khám tư nhân, và nếu em có **Bảo hiểm y tế (BHYT)** thì sẽ được chi trả một phần hoặc toàn bộ tùy tuyến khám.
+CMND	2462	EXPAND	chứng minh nhân dân			**Chuẩn bị trước khi đi khám**: - Mang theo CMND/CCCD và tiền mặt.
+CT	2299	SPELL				g gan thận - **Siêu âm hạch**: Đánh giá kích thước, cấu trúc hạch (dịch hay đặc) - **Chụp CT hoặc PET-CT**: Nếu hạch to hoặc nghi ngờ ác tính - **Sinh thiết hạc
+TV	2036	SPELL				từ từ duỗi thẳng một chân ra, giữ 5-10 giây - Lặp lại 10 lần mỗi bên - Có thể làm khi xem TV hoặc ngồi nghỉ **Bài tập 3: Đi bộ nhẹ nhàng** - Đi bộ 15-20 phút mỗ
+FIFE	1975	STRIP				- FIFE: Khó ăn uống, ngại vệ sinh.
+NGAY	1879	LOWERCASE	ngay			KHI NÀO CẦN DỪNG TẬP VÀ ĐI KHÁM NGAY?** Nếu trong hoặc sau khi tập mà anh thấy: - Đầu gối sưng to, nóng, đỏ, hoặc sốt.
+B12	1556	SPELL				Nhưng trước tiên, anh có biết gì về tình trạng thiếu vitamin B12 không?
+GERD	1526	SPELL				- Differentials: Có thể do trào ngược dạ dày thực quản (GERD), tác dụng phụ thuốc (dù Amlodipine ít), hoặc do thay đổi huyết áp/thần kinh ban đêm.
+TSH	1434	SPELL				ssibility* of autoimmune conditions and the need for specific blood tests (CBC, Cortisol, TSH, Antibodies).
+QUAN	1357	LOWERCASE	quan			**NHẮN NHỦ QUAN TRỌNG**: - Tất cả thông tin trên là chung chung, không phải đơn thuốc - Anh PHẢI đi khám bác sĩ để được chẩn
+SPF	1225	SPELL				Dù làm văn phòng, anh vẫn nên dùng kem chống nắng SPF 30+ mỗi sáng.
+T4	1012	SPELL				- **TSH, Free T4** (để kiểm tra tuyến giáp).
+BHA	913	SPELL				m Sóc Tăng Cường (Tối - Tuần 2-3 lần)** - **Tẩy tế bào chết nhẹ**: Dùng sản phẩm chứa AHA/BHA 1-2 lần/tuần để loại bỏ da cũ, giúp da sáng hơn.
+UV	750	SPELL				độ tuổi của bác, nếp nhăn và da khô là do quá trình lão hóa tự nhiên và tác động của tia UV.
+BPPV	742	SPELL				**Anh có biết gì về chứng chóng mặt tư thế (BPPV) hoặc rối loạn tiền đình không?** **Tôi xin chia sẻ một số khả năng**: Triệu chứng của anh rất giống với tình
+LEGO	729	SPELL				Con cũng muốn được vẽ tranh và chơi LEGO như bình thường ạ.
+COPD	722	SPELL				- Hô hấp: Hen suyễn, COPD, tràn dịch màng phổi...
+IBS	721	SPELL				**Hội chứng ruột kích thích (IBS):** Đây là tình trạng ruột bị nhạy cảm quá mức, thường gây đau bụng, táo bón hoặc tiêu chảy.
+AN	697	LOWERCASE	an			dưỡng ẩm cả mặt (nhiều hơn vùng má) - Điều chỉnh thói quen nhíu mày, ngủ đủ giấc **LƯU Ý AN TOÀN**: Nếu anh áp dụng đều đặn 4-6 tuần mà tình trạng nếp nhăn, khô
+KHI	624	LOWERCASE	khi			KHI NÀO CẦN DỪNG TẬP VÀ ĐI KHÁM NGAY?** Nếu trong hoặc sau khi tập mà anh thấy: - Đầu gối sưng to, nóng, đỏ, hoặc
+CRP	623	SPELL				Các xét nghiệm cần thiết có thể bao gồm**: - Xét nghiệm máu tổng quát, CRP - Xét nghiệm lao (nếu cần) - Siêu âm hạch để đánh giá đặc điểm **3.
+NGUY	595	LOWERCASE	nguy			Theo em, em muốn chọn lựa chọn nào?** Trước khi em quyết định, tôi cần chia sẻ **dấu hiệu NGUY HIỂM** cần đưa bé đến bệnh viện ngay lập tức: - Sốt cao trên 39°C
+IVF	589	SPELL				- **Thụ tinh nhân tạo (IVF):** Nếu lạc nội mạc nặng, IVF là giải pháp hiệu quả cao.
+PHASE	578	STRIP				Phase: GATHERING INFORMATION (Turn 5) - Moving to PHASE 3: PROVIDING STRUCTURE Patient Age: 62 Objective: Summarize findings, provide education using Ask-Tell-A
+T3	537	SPELL				hiếu máu, nhiễm trùng - Đường huyết: loại trừ đái tháo đường - Chức năng tuyến giáp (TSH, T3, T4): kiểm tra rối loạn tuyến giáp - Các chỉ số viêm: CRP, tốc độ m
+OPQRST	526	STRIP				Đã khai thác đủ OPQRST, Red Flags, PMH, Medications, Social History, ROS, và FIFE.
+EMG	524	SPELL				bác sĩ chuyên khoa thần kinh hoặc cơ xương khớp để được chẩn đoán chính xác bằng điện cơ (EMG) nếu cần.
+BV	517	EXPAND	bệnh viện			**Ưu tiên hàng đầu**: Ho tất cả thủ tục để bé được nhập viện sớm tại BV Ung bướu Hà Nội 2.
+CBC	514	SPELL				Bác sĩ sẽ thăm khám trực tiếp, sờ nắn hạch kỹ lưỡng và có thể chỉ định: - Xét nghiệm máu (CBC, CRP, VSR) - Chụp X-quang hoặc CT scan nếu cần - Sinh thiết hạch n
+HPV	513	SPELL				Tuy nhiên, **tiêm vắc-xin HPV** là rất quan trọng để phòng ngừa ung thư cổ tử cung, ngay cả ở độ tuổi của bác nếu bác vẫn còn quan hệ tình
+HP	500	SPELL				sát trực tiếp niêm mạc, xem có viêm loét hay không, và có thể sinh thiết nếu cần - **Test HP**: Kiểm tra vi khuẩn Helicobacter pylori nếu nghi ngờ - Các xét ngh
+CHO	486	LOWERCASE	cho			VỀ KEM CHỐNG NẮNG CHO DA DẦU** **Loại phù hợp**: - Chọn kem chống nắng vật lý lai hóa học hoặc hóa học - Dạng lotion/kem mỏng, oil-
+HTN	442	SPELL				- Tiền sử: HTN, DM, BPH.
+AMH	398	SPELL				AMH thấp
+NSAID	397	SPELL				Thuốc giảm đau Ibuprofen (thuộc nhóm NSAID) có thể làm tăng huyết áp và giảm tác dụng của một số loại thuốc điều trị cao huyết áp.
+BMI	391	SPELL				Với chiều cao 1m58 và cân nặng 62kg, chỉ số BMI của anh/chị khoảng 24.8 - đây là mức cân nặng bình thường, không phải nguyên nhân chính gây ra vấn đề này.
+PMH	390	STRIP				- PMH: Sạch.
+ROS	390	STRIP				- ROS: Hôi miệng (+), không chảy máu nướu, há miệng bình thường.
+LDL	371	SPELL				**Lipidogram**: Kiểm tra lại cholesterol (tổng cholesterol, LDL, HDL) để đánh giá chính xác tình trạng của em.
+RA	369	LOWERCASE	ra			phút thường gợi ý viêm xương khớp (OA), trong khi > 30-60 phút gợi ý viêm khớp dạng thấp (RA) hoặc các bệnh viêm khớp khác.
+UTI	338	SPELL				l:** medical evaluation I need to ask about specific symptoms to differentialiate between UTI stones stones, etc..
+G6PD	338	SPELL				**Tán huyết cấp**: Có thể do thuốc, miễn dịch, di truyền (G6PD, spherocytosis).
+N95	310	SPELL				Về môi trường làm việc:** - Kiểm tra lại chất lượng khẩu trang (nên dùng loại N95 hoặc có van thở).
+FSH	307	SPELL				- **Xét nghiệm hormone sinh dục nam** (như Testosterone, FSH, LH) để kiểm tra xem có sự mất cân bằng nội tiết tố nào không.
+PCOS	294	SPELL				24 của em, có thể có nhiều nguyên nhân khác như: - Rối loạn nội tiết tố - Tình trạng như PCOS (hội chứng buồng trứng đa nang) - Căng thẳng, cân nặng thay đổi - 
+CC	284	SPELL				Tình trạng hiện tại: - CC: Đau răng trong cùng, sưng nướu, đau nhói dữ dội khi cắn mạnh.
+AHA	255	SPELL				Chăm Sóc Tăng Cường (Tối - Tuần 2-3 lần)** - **Tẩy tế bào chết nhẹ**: Dùng sản phẩm chứa AHA/BHA 1-2 lần/tuần để loại bỏ da cũ, giúp da sáng hơn.
+TIA	244	SPELL				- Tuy nhiên, tê tay thoáng qua có thể là TIA (cơn thiếu máu não thoáng qua) hoặc do nguyên nhân thần kinh cơ.
+GATHERING	237	STRIP				Phase: GATHERING INFORMATION (Turn 5) - Moving to PHASE 3: PROVIDING STRUCTURE Patient Age: 62 Objective: Summarize findings,
+RF	228	SPELL				**Các xét nghiệm cần thiết**: Bác sĩ có thể yêu cầu xét nghiệm máu (CRP, HLA-B27, RF), chụp X-quang hoặc MRI cột sống **Lưu ý an toàn**: Nếu em có triệu chứng n
+ENT	227	SPELL				- **Khuyến cáo**: Cần đi khám chuyên khoa Tai Mũi Họng (ENT) càng sớm càng tốt.
+ANH	220	LOWERCASE	anh			**TÓM TẮT KẾ HOẠCH CỦA ANH**: - Áp dụng quy trình skincare 3 bước: Tẩy trang → Rửa mặt → Dưỡng ẩm + Kem chống nắng - Chọn kem chống nắng
+LH	216	SPELL				- **Xét nghiệm hormone sinh dục nam** (như Testosterone, FSH, LH) để kiểm tra xem có sự mất cân bằng nội tiết tố nào không.
+SAFETY	213	STRIP				ngay ✅ **Điều trị**: Tùy chẩn đoán, có thể dùng thuốc hoặc cần can thiệp chuyên sâu hơn **SAFETY NETTING (LƯU Ý AN TOÀN):** Anh Hùng à, nếu trong thời gian chờ 
+PROVIDING	211	STRIP				Phase: GATHERING INFORMATION (Turn 5) - Moving to PHASE 3: PROVIDING STRUCTURE Patient Age: 62 Objective: Summarize findings, provide education using Ask-Tell-A
+EM	203	LOWERCASE	em			**EM CẦN NGHE KỸ NÀY**: Em **TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ MUA KHÁNG SINH UỐNG** nhé!
+ADHD	189	SPELL				Rối loạn tăng động giảm chú ý (ADHD) - có thể xuất hiện sớm.
+PSA	187	SPELL				Xét nghiệm máu PSA để loại trừ các bệnh lý nghiêm trọng hơn nếu cần.
+ESR	183	SPELL				phù hợp - Các xét nghiệm cần làm: Công thức máu, chức năng đông máu, xét nghiệm viêm (CRP,ESR) - **Chuẩn bị**: Nhịn ăn 8-12 giờ trước khi lấy máu (chỉ uống nước
+THEO	182	LOWERCASE	theo			THEO DÕI TRIỆU CHỨNG**: - Trong 1-2 tuần, nếu triệu chứng giảm (ít chảy máu, bớt đau) thì tiếp tục.
+ALT	181	SPELL				khuyên em nên đi khám bác sĩ để được làm xét nghiệm máu kiểm tra chức năng gan (như AST, ALT, bilirubin) và siêu âm gan, giúp xác định chính xác nguyên nhân và 
+AST	180	SPELL				h/chị khuyên em nên đi khám bác sĩ để được làm xét nghiệm máu kiểm tra chức năng gan (như AST, ALT, bilirubin) và siêu âm gan, giúp xác định chính xác nguyên nh
+SIDS	177	SPELL				, khi bé **ngủ**, chị **tuyệt đối phải cho bé nằm ngửa** để tránh nguy cơ đột tử sơ sinh (SIDS).
+VA	175	SPELL				iều), anh/chị nên đưa bé đi khám bác sĩ nhi để kiểm tra kỹ hơn và loại trừ viêm xoang hay VA.
+RICE	174	SPELL				Về cách giảm đau nhanh để đi làm, anh/chị có thể áp dụng phương pháp **RICE**: 1.
+STI	172	SPELL				n cách đây 1 tuần, em cũng cần được kiểm tra để loại trừ các bệnh lây qua đường tình dục (STI) như lậu, chlamydia.
+IUI	169	SPELL				**Sự khác biệt giữa IUI và IVF:** **IUI (Intrauterine Insemination):** - Bác sĩ sẽ bơm tinh trùng đã được rửa sạch trực tiếp vào tử c
+QRS	163	SPELL				QRS rộng
+STRUCTURE	160	STRIP				Phase: GATHERING INFORMATION (Turn 5) - Moving to PHASE 3: PROVIDING STRUCTURE Patient Age: 62 Objective: Summarize findings, provide education using Ask-Tell-A
+ACE	160	SPELL				- **Cao huyết áp**: Cần lưu ý thuốc đang dùng (thường là lợi tiểu, ức chế ACE/ARB) có thể gây tác dụng phụ, nhưng không giải thích rõ ràng toàn bộ picture (sốt,
+COMPLETE	158	STRIP				**Thêm [COMPLETE]**: Vì bệnh nhân xác nhận đã hài lòng và không còn thắc mắc.
+INFORMATION	157	STRIP				Phase: GATHERING INFORMATION (Turn 5) - Moving to PHASE 3: PROVIDING STRUCTURE Patient Age: 62 Objective: Summarize findings, provide educ
+COVID	154	SPELL				Nhưng con vẫn lo là không biết có phải con bị COVID không nữa?
+PPI	153	SPELL				- **Thuốc men**: Nếu nặng, bác sĩ có thể kê thuốc giảm acid (thường là PPI), nhưng sẽ điều trị theo đợt, không phải uống vĩnh viễn.
+KHOA	152	SPELL				DÙNG CHỈ NHA KHOA**: - **Thời gian**: 1 lần/ngày (tối trước khi đánh răng).
+OCT	151	SPELL				Nếu được, chọn bệnh viện có thể chụp cắt lớp võng mạc (OCT) hoặc siêu âm mắt để xác định chính xác tình trạng.
+CLOSING	148	SPELL				<think> **Kiểm tra giai đoạn**: Tôi đang ở PHASE 4 (CLOSING).
+CPAP	147	SPELL				ngủ (sleep study) để chẩn đoán chính xác - Được tư vấn điều trị phù hợp (có thể dùng máy CPAP) **Trong lúc chờ đi khám:** - Tránh lái xe hay vận hành máy móc ng
+DIY	146	SPELL				Tôi cũng hay làm DIY decor cho nhà cửa, có thể do tôi thường xuyên dùng tua vít hay các dụng cụ nhỏ không ạ?
+HDL	145	SPELL				**Lipidogram**: Kiểm tra lại cholesterol (tổng cholesterol, LDL, HDL) để đánh giá chính xác tình trạng của em.
+ABCDE	143	SPELL				Chúng ta có thể nhớ theo quy tắc **ABCDE**: - **A (Asymmetry - Không đối xứng)**: Nốt ruồi bị méo mó, một bên không đều với bên kia.
+DM	140	SPELL				- Tiền sử: HTN, DM, BPH.
+GED	140	SPELL				Tôi đang cố gắng học để thi lấy bằng GED và học thêm về quản lý nhà hàng để thăng tiến.
+OSA	136	SPELL				hẹ** - tôi rất lo lắng cho anh về một tình trạng gọi là **ngưng thở khi ngủ do tắc nghẽn (OSA)**.
+OTC	135	SPELL				Nếu cơn đau quá khó chịu trước khi đi khám, bác có thể dùng thuốc giảm đau không kê đơn (OTC) để tạm thời giảm bớt, nhưng nên hỏi ý kiến dược sĩ về loại thuốc p
+H5	133	SPELL				Cúm A H5
+FNA	128	SPELL				nh: - **Siêu âm vú**: để xem rõ đặc điểm khối u và dịch - **Chọc hút tế bào bằng kim nhỏ (FNA)** hoặc **sinh thiết**: để lấy mẫu xét nghiệm nếu cần - **Chụp nhũ
+UVA	127	SPELL				ng nắng (bắt buộc)** - Anh nên dùng kem chống nắng có SPF 30-50, broad spectrum (chống cả UVA và UVB).
+DVT	121	SPELL				- **Red Flags**: Đã loại trừ DVT cấp (không đau, không đỏ, không nóng), không nhiễm trùng.
+TMJ	119	SPELL				khi thức dậy là những dấu hiệu rất điển hình của tình trạng rối loạn khớp thái dương-hàm (TMJ) hoặc do nghiến răng khi ngủ.
+SINH	118	SPELL				**EM CẦN NGHE KỸ NÀY**: Em **TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ MUA KHÁNG SINH UỐNG** nhé!
+EEG	118	SPELL				Họ có thể đề nghị làm một số xét nghiệm như: - **Đo điện não đồ (EEG)**: Để xem hoạt động điện trong não khi ngủ.
+UVB	117	SPELL				(bắt buộc)** - Anh nên dùng kem chống nắng có SPF 30-50, broad spectrum (chống cả UVA và UVB).
+SCID	113	SPELL				Bệnh SCID
+TRONG	112	SPELL				u ngón tay massage nhẹ nhàng theo vòng tròn trong 2-3 phút **DINH DƯỠNG TỐT CHO DA TỪ BÊN TRONG:** - **Uống đủ nước**: 1.5-2 lít nước/ngày - **Ăn nhiều**: Rau x
+NIPT	110	SPELL				đình và có ý định mang thai, em sẽ được tư vấn về **chẩn đoán trước sinh** như xét nghiệm NIPT (xét nghiệm máu mẹ từ tuần 10-12 thai kỳ) hoặc chọc ối/sinh thiết
+ANA	109	SPELL				Để biết chính xác, em cần làm xét nghiệm máu (kiểm tra yếu tố Rheumatoid, CRP, ANA...) và chụp hình ảnh khớp.
+SAU	108	LOWERCASE	sau			"**SAU ĐÓ PHẢI KÊU GỌI BÁC ĐI KHÁM NGAY** **Câu hỏi cuối cùng trước khi đưa ra khuyến nghị:** ""Bác đang uống thuốc c"
+HIV	106	SPELL				Em có bị HIV hay các bệnh suy giảm miễn dịch không?
+B1	106	SPELL				**Thiếu chất**: Em nghĩ đúng đấy, thiếu một số vitamin như B12, B1 có thể gây tê bì chân tay.
+RLS	105	SPELL				- **Bước 2**: Bác sĩ có thể điều chỉnh thuốc huyết áp hoặc kê đơn thuốc đặc trị cho RLS nếu cần.
+TIN	104	SPELL				THÔNG TIN CÁ NHÂN**: - Tiền sử bệnh: __ (tiểu đường, tim mạch, ung thư...) - Thuốc đang dùng: __ - Tiếp xúc nguồn lây:
+GIAN	101	SPELL				MỐC THỜI GIAN ĐI KHÁM:** Anh nên tập luyện và theo dõi trong **2-4 tuần**.
+PT	100	SPELL				**Xét nghiệm đông máu**: Kiểm tra chức năng đông máu (thường là PT, aPTT).
+ABI	100	SPELL				yên khoa **Lồng ngực - Mạch máu** để bác sĩ đo chỉ số lưu lượng máu ở chân (gọi là chỉ số ABI).
+B6	97	SPELL				- Thuốc giảm đau thần kinh (ví dụ: gabapentin, pregabalin) - Vitamin nhóm B (đặc biệt B1, B6, B12) bổ sung thần kinh - Các thuốc điều hòa thần kinh khác 3.
+WPW	96	SPELL				**Tình huống**: Bệnh nhân WPW có triệu chứng rõ ràng: - Cơn tim đập nhanh 15-20 phút, xuất hiện khi làm việc nặng/căng thẳng, đỡ khi nghỉ -
+CLL	92	SPELL				u chứng mệt mỏi, sốt nhẹ, đau nhức xương và bứt rứt gần hai tuần, trong khi đang điều trị CLL bằng ibrutinib.
+ER	91	SPELL				g:** I must mention that if he feels very weak, dizzy, or nauseous, he needs to go to the ER immediately (Addisonian crisis).
+H1N1	91	SPELL				*nhiễm trùng hô hấp trên** (viêm họng cấp), không phải bệnh liên cầu khuẩn ở lợn (cúm heo/H1N1) đâu ạ.
+NOT	90	SPELL				cope - I can explain the typical process of seeing a doctor for this condition - I should NOT prescribe specific medications or dosages - I should prepare her f
+GIAI	87	SPELL				**KIỂM TRA GIAI ĐOẠN**: Giai đoạn 4 (Closing).
+HRT	85	SPELL				**Liệu pháp hormone (HRT)**: Giúp điều hòa kinh nguyệt, giảm triệu chứng, và bảo vệ sức khỏe xương.
+QT	85	SPELL				Hội chứng QT kéo dài
+HA	84	SPELL				*thành phần** kem dưỡng ẩm an toàn, dễ tìm: **Thành phần nên có:** - **Hyaluronic acid** (HA): Giữ nước tốt, không gây kích ứng - **Ceramide**: Phục hồi hàng rà
+THAY	83	SPELL				THAY ĐỔI LỐI SỐNG** - **Ngủ đủ giấc**: 7-8 tiếng, hạn chế thức khuya - **Uống đủ nước**: 2-2.5 lít nước/ngày - **H
+ATM	83	SPELL				phức tạp đâu: **Em cần mang theo:** - **CMND/CCCD** để đăng ký khám - **Tiền** hoặc **thẻ ATM** để đóng phí khám **Em không cần mang theo:** - Hồ sơ bệnh án (vì
+H5N1	82	SPELL				Cúm A H5N1
+IPL	81	SPELL				yên sâu**: Đến bác sĩ da liễu để được tư vấn các phương pháp như laser, peel da, ánh sáng IPL - hiệu quả nhanh hơn nhưng cần làm tại cơ sở y tế uy tín **Về mất 
+PRP	80	SPELL				**Tiêm khớp**: Tiêm huyết tương giàu tiểu cầu (PRP) hoặc acid hyaluronic nếu đau nhiều, có thể giúp giảm đau vài tháng.
+CNC	80	SPELL				Em làm công nhân trong xưởng sản xuất, hay phải dùng máy CNC và thao tác lặp đi lặp lại một.
+TRA	78	SPELL				**KIỂM TRA GIAI ĐOẠN**: Giai đoạn 4 (Closing).
+CHI	75	SPELL				**VỆ SINH GIẤC NGỦ - HƯỚNG DẪN CHI TIẾT:** **Thời gian:** - Đi ngủ: 10-10:30 tối (muộn nhất 11 giờ) - Dậy: 6-6:30 sáng (đủ 7-8 tiếng) - Nghỉ trư
+NAY	74	SPELL				--- **TÓM TẮT PHIÊN TƯ VẤN HÔM NAY:** ✅ **Triệu chứng chính**: Mệt mỏi, đau bụng dưới sườn phải (4-5/10), chán ăn, buồn nôn, vàng da/vàng mắt.
+ICSI	73	SPELL				- **IVF (Thụ tinh trong ống nghiệm)**: Phù hợp khi tinh trùng yếu nhiều hoặc AMH thấp - **ICSI (Tiêm tinh trùng vào trứng)**: Dùng cho tinh trùng rất yếu Quyết 
+INT	73	SPELL				the the I I I I the the I I I I the the I I, I the I I I I I I- ** I I I I the I I I INT INT I I I I I I I I I I INT INT INT I I INT INT INT INT I I I INT INT I
+NONE	72	SPELL				"Tôi nghe anhNONENONENONENONE"" "" "" "" "" "" "" "" "" "" "" "" "" "" NONE NONE NONENONENONE�"" � NONE"
+QUESTION	70	SPELL				o know when to expect improvement - **E**xpectations: Looking for timeline for recovery **QUESTION COUNT**: Patient is asking a question, not me.
+TIM	69	LOWERCASE	tim			hể chẩn đoán chính xác** thay bác sĩ, nhưng con **KHUYẾN NGHỊ BÁC NÊN ĐI KHÁM CHUYÊN KHOA TIM MẠCH NGAY** để được làm các xét nghiệm cần thiết như điện tâm đồ, 
+NETTING	69	SPELL				**Điều trị**: Tùy chẩn đoán, có thể dùng thuốc hoặc cần can thiệp chuyên sâu hơn **SAFETY NETTING (LƯU Ý AN TOÀN):** Anh Hùng à, nếu trong thời gian chờ đi khám
+BPH	69	SPELL				- Tiền sử: HTN, DM, BPH.
+AMD	69	SPELL				g mất thị lực ngoại vi trước, có thể không đau (chronic glaucoma) - Thoái hóa hoàng điểm (AMD): mờ trung tâm, nhìn méo - Vấn đề khúc xạ: cần điều chỉnh kính - P
+ACL	68	SPELL				lỏng lẻo**: Dấu hiệu quan trọng gợi ý tổn thương dây chằng (ví dụ: dây chằng chéo trước - ACL).
+PCR	67	SPELL				đánh giá nhiễm trùng - Chụp X-quang phổi nếu nghi ngờ viêm phổi - Cấy đờm hoặc xét nghiệm PCR để xác định vi khuẩn/phế cầu khuẩn nếu cần - **Điều trị**: Nếu là 
+OA	66	SPELL				**Thoái hóa cột sống (OA)**: Phù hợp tuổi 62, đau tăng khi vận động, giảm nghỉ 3.
+IT	66	SPELL				Em đang học để thi chứng chỉ IT, áp lực lắm ạ.
+CLINICAL	66	STRIP				**CLINICAL LOGIC**: - Triệu chứng: Đau lưng giữa + tê hai bên mạng sườn.
+ARB	65	SPELL				- **Cao huyết áp**: Cần lưu ý thuốc đang dùng (thường là lợi tiểu, ức chế ACE/ARB) có thể gây tác dụng phụ, nhưng không giải thích rõ ràng toàn bộ picture (sốt,
+PA	64	SPELL				"/kem mỏng, oil-free, không gây bít tắc lỗ chân lông (non-comedogenic) - Chỉ số SPF 30-50, PA+++ trở lên - Tìm chữ ""oil-free"" hoặc ""dành cho da dầu"" **Cách dùng*"
+FODMAP	63	SPELL				Thử giảm các thực phẩm giàu FODMAP**: Đây là nhóm carbohydrate khó tiêu hóa, có thể gây đầy hơi và đau bụng.
+CAO	62	SPELL				**Huyết áp cao không kiểm soát**: Chỉ số 145/95 mmHg của Anh cách đây 1 tháng là CAO, và việc Anh không uống thuốc đều đặn khiến tình trạng này kéo dài.
+DCIS	61	SPELL				Đây là mục tiêu hoàn toàn khả thi với DCIS giai đoạn sớm.
+XE	59	SPELL				Anh/Chị tuyệt đối **KHÔNG TỰ LÁI XE** nữa nhé.
+VSD	59	SPELL				**Tóm tắt những gì anh mô tả:** - Tiền sử thông liên thất (VSD) từ nhỏ, đã tự đóng lại - Khó thở, tim đập nhanh, nặng ngực khi leo 2-3 tầng cầu thang hoặc đi bộ
+INITIATING	58	SPELL				[[INITIATING]]
+SAO	57	SPELL				Tôi xin giải thích rõ: **Tại SAO bác vẫn nên đi nội soi đại tràng dù triệu chứng có cải thiện?** Vì bác đã **50 tuổi** - đây là độ tuổi **bắt
+FV	56	SPELL				- **Bệnh viện FV** hoặc **Bệnh viện Tâm Anh** (nếu muốn khám dịch vụ nhanh hơn).
+RSI	55	SPELL				**Trước tiên, chị có biết gì về hội chứng đau cơ xương do tư thế làm việc (còn gọi là RSI - Repetitive Strain Injury) chưa?** Nếu chưa, tôi sẽ giải thích ngắn g
+DA	54	SPELL				VỀ KEM CHỐNG NẮNG CHO DA DẦU** **Loại phù hợp**: - Chọn kem chống nắng vật lý lai hóa học hoặc hóa học - Dạng lotion/kem mỏng, oil-fre
+CBT	54	SPELL				Bác sĩ tâm lý sẽ: * **Dùng liệu pháp nhận thức - hành vi (CBT)**: Giúp anh/chị thay đổi cách suy nghĩ về những căng thẳng (công việc, ở một mình), từ đó não khô
+PCP	54	SPELL				**Nhờ bác sĩ gia đình (Primary Care Physician - PCP)**: Nếu em có bác sĩ gia đình quen, hãy đặt lịch khám và nhờ họ giới thiệu đến bác sĩ chuyên khoa Cơ xương k
+MUA	51	SPELL				**EM CẦN NGHE KỸ NÀY**: Em **TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ MUA KHÁNG SINH UỐNG** nhé!
+ERCP	50	SPELL				**Nội soi đường mật (ERCP) hoặc sinh thiết gan**: Chỉ cần làm nếu xét nghiệm máu và siêu âm chưa rõ ràng, hoặc nghi ngờ có sán trong đư
+CUNG	50	SPELL				**TÓM TẮT THÔNG TIN BÁC CUNG CẤP:** - **Vấn đề chính**: Đau khuỷu tay phải - **Thời gian**: Khoảng 2 tuần nay - **Nguyên nhân**: Sau khi d
+DINH	48	SPELL				**Massage**: Mỗi tối, dùng đầu ngón tay massage nhẹ nhàng theo vòng tròn trong 2-3 phút **DINH DƯỠNG TỐT CHO DA TỪ BÊN TRONG:** - **Uống đủ nước**: 1.5-2 lít nư
+HSV	48	SPELL				s sinh dục** (mụn rộp sinh dục), một bệnh lây qua đường tình dục do virus herpes simplex (HSV) gây ra.
+QUY	44	SPELL				QUY TRÌNH SKINCARE CƠ BẢN 3 BƯỚC (Sáng & Tối)** **Bước 1: Làm sạch (Cleansing)** - Sáng: Rửa mặt bằng sữa rửa mặt
+BNP	43	SPELL				**Xét nghiệm máu**: Đánh giá chức năng thận, điện giải, men tim, BNP (chỉ số suy tim) 2.
+CTS	43	SPELL				như sau: **Chẩn đoán sơ bộ**: Triệu chứng của em rất phù hợp với **hội chứng ống cổ tay (CTS)** - tình trạng thần kinh giữa bị chèn ép ở cổ tay, hoặc **viêm gân
+CON	43	SPELL				Bác sĩ chuyên khoa sẽ thăm khám kỹ và có thể chỉ định xét nghiệm --- **LƯU Ý AN TOÀN CỦA CON:** Bác cần đi khám ngay nếu: - Triệu chứng tê tăng nặng dữ dội - Xu
+SLE	42	SPELL				This is **Keratoconjunctivitis Sicca** (Dry eyes), common in Sjogren's syndrome or SLE, but also seen in APS.
+ASK	41	SPELL				**ASK - TELL - ASK**: Bác có biết gì về hội chứng ruột kích thích này chưa ạ?
+RFA	40	SPELL				i đoạn phát hiện: - **Giai đoạn sớm**: Có thể phẫu thuật cắt bỏ khối u, đốt sóng cao tần (RFA), hoặc ghép gan.
+CO2	40	SPELL				Điều này khiến lượng khí CO2 trong máu thay đổi, gây ra cảm giác ngứa ran, tê bì ở tay chân.
+ED	40	SPELL				**Về thuốc hỗ trợ:** Cháu hiểu bác muốn dùng thuốc, nhưng bác cần lưu ý: - Thuốc hỗ trợ ED (như Viagra, Cialis...) có thể ảnh hưởng đến tim mạch.
+HR	39	SPELL				sang làm việc bán thời gian** hoặc làm việc từ xa nếu công ty cho phép - **Trò chuyện với HR** (phòng nhân sự) của công ty đểhiểu về quyền lợi nghỉ ốm **Về chi 
+START	39	SPELL				[[START]]
+RED	39	SPELL				- Khả năng cao: Viêm khớp nhiễm trùng (septic arthritis) hoặc viêm khớp cấp tính khác - **RED FLAG**: Đau dữ dội, sưng đỏ nóng, không có chấn thương - cần loại 
+FT4	39	SPELL				**Kiểm tra tuyến giáp**: Vì bác dễ nóng tính hơn, nên xét nghiệm TSH, FT4 Bác nghĩ sao ạ?
+IBD	39	SPELL				**Viêm ruột mạn (IBD)**: Ít khả năng hơn vì không có máu, không sút cân.
+ITP	39	SPELL				không có bệnh nền, không thuốc -> Cần nghĩ đến **Ban xuất huyết giảm tiểu cầu miễn dịch (ITP)** hoặc các bệnh lý đông máu khác.
+JIA	38	SPELL				thăm khám trực tiếp** để loại trừ các bệnh lý mạn tính như viêm khớp tự miễn thiếu niên (JIA) hoặc các bệnh tự miễn khác.
+NST	37	SPELL				- **Xét nghiệm Karyotype (chụp NST)**: Nếu bác sĩ nghi ngờ có bất thường NST tiềm ẩn trong gia đình, bác sĩ có thể đề nghị em làm xét nghiệm máu
+EKG	37	SPELL				"Về câu hỏi của bác: ""QRS rộng"" là thuật ngữ chỉ một phần trên điện tâm đồ (EKG), nó thường liên quan đến cách nhịp tim hoạt động hoặc có thể do ảnh hưởng của th"
+II	36	SPELL				**Về collagen type II**: Đây là thực phẩm chức năng, thường không cần toa bác sĩ, nhưng tôi khuyên chị nên: - Mua ở hiệu thuốc uy t
+DANH	36	SPELL				**DANH SÁCH TRIỆU CHỨNG CHO BÁC SĨ** **1.
+MBA	36	SPELL				Tôi cũng đang có kế hoạch thi MBA và muốn được tư vấn thêm về cách giảm stress để có thể làm việc hiệu quả hơn.
+BS	36	SPELL				ông cần kiêng đồ gì **Tóm tắt kế hoạch:** - Bác sẽ đi khám Da liễu hoặc Ngoại tổng quát - BS sẽ vệ sinh rốn, kê thuốc và hướng dẫn chăm sóc - Không cần phẫu thu
+TPCN	36	SPELL				(Thuốc giảm đau, kháng sinh, TPCN...).
+INR	35	SPELL				răng) để bác sĩ cân nhắc nguy cơ chảy máu và có thể yêu cầu Bác kiểm tra chỉ số đông máu (INR) trước.
+AFP	35	SPELL				n và làm thêm xét nghiệm chuyên sâu** - Bác cần quay lại bệnh viện để làm thêm xét nghiệm AFP (chỉ số ung thư gan), sinh thiết khối u (nếu bác sĩ chỉ định), và 
+LPR	35	SPELL				ực quản (GERD)**, và biến chứng lên họng gọi là **trào ngược dạ dày thực quản thanh quản (LPR)**.
+D3	35	SPELL				Vitamin D**: - Anh/chị có thể tự mua ở hiệu thuốc: Nên chọn loại **Canxi kết hợp Vitamin D3** (ví dụ: Canxi carbonate + D3, hoặc Canxi citrate + D3).
+KEM	34	SPELL				VỀ KEM CHỐNG NẮNG CHO DA DẦU** **Loại phù hợp**: - Chọn kem chống nắng vật lý lai hóa học hoặc hóa học - Dạng lotion
+MANG	34	SPELL				Đây là checklist em nên chuẩn bị: **📄 GIẤY TỜ CẦN MANG**: - Kết quả xét nghiệm, chẩn đoán cũ (em đã có rồi phải không?) - Đơn thuốc (nếu có) - Thẻ bảo hiểm y tế
+HBV	34	SPELL				nghiệm: công thức máu, chức năng gan (AST, ALT, bilirubin), định lượng virus viêm gan B (HBV DNA), và siêu âm gan **Lưu ý an toàn quan trọng**: Nếu anh/chị thấy
+THE	34	LOWERCASE	the			"Hãy nói như một bệnh nhân."" **I AM THE PATIENT.** The AI is the patient."
+CH	34	SPELL				DÙNG CHỈ NHA KHOA**: - **Thời gian**: 1 lần/ngày (tối trước khi đánh răng).
+TESE	34	SPELL				ch đồ để kiểm tra có tinh trùng trở lại không **Về phương án lấy tinh trùng từ tinh hoàn (TESE):** Nếu phẫu thuật nối ống dẫn không thành công, bạn hoàn toàn có
+PMR	33	SPELL				Tôi sẽ giải thích sơ qua về **Polymyalgia Rheumatica (PMR)** để bác yên tâm: **Bệnh có nguy hiểm không?** - PMR không phải bệnh nan y, nhưng cần điều trị kịp th
+H2	33	SPELL				**Khám bác sĩ**: Để được kê thuốc giảm acid nếu cần (thuốc kháng H2 hay ức chế bơm proton) **Lưu ý quan trọng**: Nếu bác có đau ngực dữ dội, khó thở, nôn ra máu
+TMD	33	SPELL				"**Anh đã biết gì về ""rối loạn khớp thái dương hàm"" (TMD) chưa?** Nếu chưa, tôi có thể giải thích thêm để anh hiểu rõ hơn về tình trạng của mình."
+ACTH	33	SPELL				Ngoài ra, anh nên đến bệnh viện để xét nghiệm các chỉ số sau: - **Cortisol và ACTH** (để kiểm tra tuyến thượng thận).
+MMR	33	SPELL				ông thấy sưng tại chỗ, nhưng bé có thể bị đau nhức cơ hoặc mệt mỏi toàn thân sau mũi tiêm MMR, khiến bé cảm thấy khó chịu khi chịu lực ở chân.
+GHI	32	SPELL				Bác có thể in ra hoặc ghi lại vào giấy note nhé: --- **BẢN GHI CHÚ TRƯỚC KHI ĐI KHÁM** **I.
+HIIT	32	SPELL				Tập gym:** - **Nên tránh** các bài tập nặng như: nâng tạ nặng, cardio cường độ cao, HIIT - Em có thể tập **đi bộ nhẹ nhàng** hoặc yoga thư giãn - Tuyệt đối khôn
+LASIK	32	SPELL				"bé lớn**: Thường sau 18 tuổi, khi độ cận ổn định (không tăng trong 1-2 năm) - Phẫu thuật LASIK/PRK chỉ sửa độ cận, không ""chữa khỏi"" tật - nhưng sau mổ bé không"
+PAD	32	SPELL				*: - **Thuốc**: - Cao huyết áp: Amlodipine 5mg → **OK**, calcium channel blocker, tốt cho PAD.
+LO	31	SPELL				VỀ GIẢM LO ÂU:** - Dành 10-15 phút mỗi ngày để thư giãn (nghe nhạc, đi dạo, hít thở sâu) - Viết ra những điều lo lắng ra
+GIA	31	SPELL				ao nhiêu là đủ **Tóm lại**: Câu trả lời cho cả 2 câu hỏi của bác là: **HÃY ĐI KHÁM BÁC SĨ GIA ĐÌNH** để được tư vấn chính xác và an toàn nhất.
+CA	31	SPELL				- **Xét nghiệm máu:** Kiểm tra chỉ số CA-125 (chỉ số ung thư, nhưng tăng cao trong lạc nội mạc).
+DEXA	31	SPELL				- Mang theo **kết quả xét nghiệm mật độ xương (DEXA)** cũ (nếu có).
+CPR	31	SPELL				Tôi đã được CPR và dùng máy khử rung ngay tại chỗ.
+TELL	30	SPELL				**TELL:** Amlodipine 10mg có thể gây chóng mặt, tim đập nhanh hơn 5mg, nhưng nếu bác tự ý giảm liều thì huyết áp có
+HEPA	30	SPELL				Cách dùng máy lọc không khí hiệu quả:** - **Chọn máy có lọc HEPA**: Đây là loại màng lọc tốt nhất để giữ lại bụi mịn, phấn hoa, lông thú cưng.
+L5	30	SPELL				tình trạng tê bì và yếu cơ chân trái của bác, nguyên nhân có thể do chèn ép rễ thần kinh L5.
+RHM	29	SPELL				Chị Mai nên đi khám chuyên khoa **Răng Hàm Mặt (RHM)** trước tiên để kiểm tra khớp cắn và cấu trúc hàm.
+NGHE	28	SPELL				**EM CẦN NGHE KỸ NÀY**: Em **TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ MUA KHÁNG SINH UỐNG** nhé!
+CANNOT	28	SPELL				Tôi CANNOT chẩn đoán, nhưng phải khuyên đến bệnh viện ngay.
+RESPONSE	28	SPELL				**RESPONSE STRATEGY**: 1.
+ORESOL	27	SPELL				o bé uống một ít nước dừa nếu bé chịu, nhưng lưu ý nước dừa không thay thế được hoàn toàn ORESOL trong trường hợp mất nước.
+GGT	27	SPELL				**Xét nghiệm máu**: Kiểm tra men gan (ALT, AST), bilirubin, GGT để đánh giá chức năng gan.
+TMH	27	SPELL				Chị có thể tra cứu danh sách các bệnh viện có chuyên khoa TMH trên website của Sở Y tế TP.HCM hoặc gọi tổng đài 1080 để hỏi thông tin.
+DNA	27	SPELL				iệm: công thức máu, chức năng gan (AST, ALT, bilirubin), định lượng virus viêm gan B (HBV DNA), và siêu âm gan **Lưu ý an toàn quan trọng**: Nếu anh/chị thấy: -
+DO	27	SPELL				VỀ VIÊM XOANG DO NẤM:** Bác đừng quá lo lắng.
+RUQ	27	SPELL				- Region: Đau đúng vị trí RUQ (trên rốn bên phải), không lan.
+SJS	27	SPELL				Allopurinol là một trong những thuốc có thể gây **Stevens-Johnson Syndrome (SJS)** - một phản ứng dị ứng thuốc nặng gây tổn thương da và niêm mạc.
+AS	26	SPELL				**Viêm cột sống dính khớp (AS)**: Đây là bệnh viêm mạn tính ảnh hưởng đến cột sống và khớp hông, đặc trưng bởi đau lưng dưới, cứng buổi sán
+NCS	26	SPELL				n kinh, bác sĩ có thể chỉ định làm **điện cơ (EMG)** và **đo tốc độ dẫn truyền thần kinh (NCS)**.
+QUEN	26	SPELL				**NHỮNG THÓI QUEN TỐT EM NÊN LÀM:** 1.
+CONTINUE	25	SPELL				[[CONTINUE]]
+ASD	25	SPELL				**Về vấn đề tim mạch của em:** Thất tâm nhĩ (ASD) nếu vẫn còn lỗ thủng khi em lớn lên, có thể gây ra các vấn đề nghiêm trọng như: - Tăng áp lực trong mạch máu
+PSG	25	SPELL				tôi giải thích ngắn gọn về các xét nghiệm thường làm: **Test giấc ngủ (Polysomnography - PSG)** là xét nghiệm chính: - **Tại bệnh viện**: Em sẽ ngủ lại qua đêm 
+HSG	25	SPELL				**Có thể cần thêm (tùy bác sĩ chỉ định):** - Hysterosalpingography (HSG): Chụp buồng tử cung vòi trứng xem có tắc không - Xét nghiệm di truyền nếu cần **Về chi 
+BBQ	24	SPELL				Tôi cũng chán ăn, không còn hứng thú với những món mình từng thích, như là nướng BBQ hay tôm nướng.
+MAI	24	SPELL				**Bác CẦN ĐI KHÁM NGAY HÔM NAY hoặc NGÀY MAI** tại bệnh viện có chuyên khoa Tim mạch.
+MCI	24	SPELL				lão hóa tự nhiên, nhưng cũng có thể là dấu hiệu của suy giảm trí nhớ lành tính tuổi già (MCI) - một tình trạng có nguy cơ tiến triển thành bệnh Alzheimer hoặc c
+HTA	24	SPELL				Bác sĩ sẽ: - Làm các test trí nhớ chuyên sâu - Kiểm tra lại các bệnh nền (HTA, tiểu đường) có đang được kiểm soát tốt không - Có thể cần xét nghiệm máu, chụp nã
+CAD	24	SPELL				*Phân tích**: - Đây là hình ảnh điển hình của **bệnh mạch vành (Coronary Artery Disease - CAD)** hoặc **rối loạn nhịp tim**.
+SVT	24	SPELL				**Rối loạn nhịp tim lành tính (SVT, PAC)**: Có thể, nhưng thường kèm theo triệu chứng rõ rệt hơn (choáng váng).
+CO	23	SPELL				hChCh có ChChCh Ch ChCCCC có có có Ch O hỏi có Ch Ch, Ch Ch chO0 ChChCh b +oCC ChCh Ch + +CO là là + + b CC +C M ��C/c b b +�CC b Ch có���� ��C�� +��CCCC� ch���
+UBND	23	EXPAND	uỷ ban nhân dân			àng sớm càng tốt - Ở Bình Dương, Mai có thể liên hệ Bệnh viện Đa khoa tỉnh, Sở Y tế, hoặc UBND địa phương để được hỗ trợ về chi phí **Điều quan trọng nhất lúc n
+HVAC	23	SPELL				Bác cũng có tiền sử làm HVAC leo trèo sửa chữa, và hiện tại vẫn làm vườn, mộc, và mang vác nặng khi tình nguyện.
+CEO	23	SPELL				Tôi là CEO của một công ty, thường xuyên phải làm việc với máy tính và điện thoại nhiều giờ liền, thỉnh thoảng phải khuâ
+S1	23	SPELL				Bác sĩ chẩn đoán là thoát vị đĩa đệm L4-L5, L5-S1.
+B3	23	SPELL				NIACINAMIDE (Vitamin B3)** - **Cơ chế**: ức chế melanin di chuyển lên da, chống viêm, cải thiện hàng rào da - **Hiệu quả**: Giúp mờ đ
+ID	22	SPELL				- **Thẻ bảo hiểm/ID và tiền** (nếu có).
+OR	22	SPELL				"knowledgment] [1-2 sentences of relevant info/education if needed] [1-2 focused questions OR action recommendation]""."
+CPA	22	SPELL				Tôi đang chuẩn bị thi CPA nên không muốn ảnh hưởng đến việc học.
+TRUNG	22	SPELL				Tuy nhiên, tôi **PHẢI TRUNG THỰC VÀ BẢO VỆ AN TOÀN TÍNH MẠNG** của Anh/Chị.
+OK	22	SPELL				ton thoáng - Tránh các chất kích thích như rượu, cà phê nhiều **Về đi hiking**: Hoàn toàn OK!
+SUY	22	SPELL				c và KHÔNG khó thở đột ngột → KHÔNG phù hợp với tràn khí màng phổi cấp tính - Triệu chứng SUY TIM: ho khan, khó thở khi vận động, có thể không đau ngực → CÓ THỂ
+CRPS	22	SPELL				**Hội chứng Sudeck** (hay còn gọi là Rối loạn đau phức hợp vùng - CRPS) là một tình trạng đau mạn tính thường xảy ra sau chấn thương, dù là chấn thương nhẹ, khi
+LED	21	SPELL				Em nên dùng kem chống nắng có SPF 30-50 mỗi ngày, kể cả trong nhà vì đèn LED và màn hình máy tính.
+TW	21	SPELL				Hỏi trực tiếp bác sĩ tại BV Phụ sản TW về các phác đồ và chi phí ước tính 2.
+TRT	21	SPELL				ng, bác sĩ có thể cân nhắc liệu pháp hormone thay thế (Testosterone Replacement Therapy - TRT).
+KINH	20	SPELL				KHI ĐI KHÁM THẦN KINH, BÁC SĨ SẼ LÀM GÌ?** - **Hỏi bệnh chi tiết**: Hỏi bác về tình trạng hay quên, thời gian, mức độ - **Làm test
+B5	20	SPELL				- **Vitamin B5 (Pantothenic acid)**: Giúp da đầu khỏe mạnh.
+DM2	20	SPELL				- **PMH**: Cao huyết áp (HTN), Tiểu đường type 2 (DM2) - 2 yếu tố nguy cơ quan trọng.
+CCP	20	SPELL				ngờ viêm khớp dạng thấp (do Anh/Chị có nhắc đến), họ sẽ chỉ định xét nghiệm máu (RF, anti-CCP) để loại trừ.
+BHXH	20	EXPAND	bảo hiểm xã hội			để hỏi về chi phí phẫu thuật trĩ - **Gọi tổng đài BHYT** (số 1900.9068) hoặc đến cơ quan BHXH nơi anh đóng BHYT để được tư vấn về mức độ chi trả - **Hỏi trực ti
+DOMS	20	SPELL				sẻ, cơn đau mỏi này có vẻ như là tình trạng **đau cơ do vận động quá mức** (thường gọi là DOMS), rất phổ biến khi cơ thể phải làm việc nặng đột ngột hoặc lặp lạ
+BP	19	SPELL				- Main concern: painless hematuria for 2 weeks, pink urine - Medications: Amlodipine 5mg (BP med), Glucosamine 1500mg (supplement) - Functional impact: minimal 
+UNG	19	SPELL				Nhưng **u bã đậu KHÔNG PHẢI UNG THƯ** con nhé!
+CSC	19	SPELL				"đáp thắc mắc của Anh: **Về nguy hiểm và điều trị:** Trường hợp ""lạc nội mạc hoàng điểm"" (CSC) nếu đúng là bệnh này, thường **không phải là bệnh nguy hiểm đến mứ"
+FLAG	19	SPELL				ả năng cao: Viêm khớp nhiễm trùng (septic arthritis) hoặc viêm khớp cấp tính khác - **RED FLAG**: Đau dữ dội, sưng đỏ nóng, không có chấn thương - cần loại trừ 
+MRA	19	SPELL				thương khác, và siêu âm động mạch cảnh (để xem có hẹp hay không) hoặc chụp mạch máu não (MRA/DSA).
+EBV	19	SPELL				họng**: Bệnh này thực ra rất hiếm ở người trẻ dưới 30 tuổi, và thường liên quan đến virus EBV.
+B7	18	SPELL				c khỏe da đầu, nhưng bác sĩ Meddies khuyên em nên tập trung vào 2 nhóm chính: - **Vitamin B7 (Biotin)**: Tốt cho tóc và da đầu.
+TAY	18	LOWERCASE	tay			ĐAU NGỰC KÉO DÀI TRÊN 15 PHÚT**, **KHÓ THỞ NẶNG**, **MẤT Ý THỨC**, hoặc **ĐAU LAN RA CÁNH TAY/CẰM**, hãy **GỌI 115 NGAY** hoặc đến bệnh viện gần nhất.
+NEVER	18	SPELL				"Actually, the instruction says ""NEVER ask questions about information already provided."" They already told me about the lump characteristics."
+NAM	18	LOWERCASE	nam			**CÁCH CHĂM SÓC TẠI NHÀ CHO CHÁU NAM:** **1.
+PVD	18	SPELL				Đây có thể là **bong dịch kính sau (PVD)** hoặc **bong võng mạc**.
+PDA	18	SPELL				Patient đã cung cấp đủ thông tin về tiền sử không điều trị PDA và triệu chứng.
+TX	18	SPELL				"Mẹ em có thể tìm kiếm trên Google: ""Pediatrician near me Dallas TX"" hoặc ""Pediatric gynecologist Dallas TX"" để xem đánh giá và chọn nơi phù hợp."
+REM	18	SPELL				ọng là cần đi khám để loại trừ các nguyên nhân khác (động kinh ban đêm, rối loạn giấc ngủ REM...).
+HELLP	18	SPELL				Đây có thể là dấu hiệu của **tiền sản giật** hoặc **hội chứng HELLP** - các biến chứng thai kỳ nghiêm trọng cần điều trị kịp thời.
+MASSAGE	17	SPELL				**HƯỚNG DẪN MASSAGE MẶT GIẢM NẾP NHĂN:** **Chuẩn bị:** - Rửa sạch tay - Thoa một ít dầu ô liu/dầu dừa hoặc kem dưỡng đã làm - Mas
+VAI	17	SPELL				BÀI TẬP CỔ VÀ VAI:** - Mỗi giờ, dành 2-3 phút: - Xoay c cổ nhẹ nhàng trái-phải, lên-xuống - Gập c cổ về phía trước, sau, nghiên
+Q1	17	SPELL				"*Let's combine and prioritize.* * Q1: ""Anh/chị có thể cho biết tên loại thuốc ho và xịt mũi bé đang dùng không ạ?"" (Safety check)."
+GP	17	SPELL				**Thời gian**: Khám GP thường nhanh hơn, có thể lấy hẹn trong tuần.
+MRCP	17	SPELL				Nếu siêu âm bình thường mà triệu chứng vẫn rõ, bác sĩ có thể chỉ định thêm xét nghiệm MRCP (chụp MRI đường mật) hoặc nội soi để kiểm tra kỹ hơn.
+BCG	17	SPELL				Và em có nhớ là em đã tiêm phòng lao (vắc-xin BCG) khi còn nhỏ không ạ?
+AV	17	SPELL				N là hình ảnh điển hình của **bệnh nút sino (Sick Sinus Syndrome)** hoặc **block nhĩ-thứ (AV Block)**.
+PTH	17	SPELL				ghiệm máu để kiểm tra: - Nồng độ canxi và phospho trong máu - Mức hormone tuyến cận giáp (PTH) - Chức năng thận - Nồng độ vitamin D Ngoài ra, bác sĩ có thể yêu 
+VI	16	SPELL				"VIẾT THƯ (dễ nhất nếu cháu ngại nói trực tiếp):** - Viết một mẩu giấy ngắn: ""Bố/mẹ ơi, con có mấy triệu chứng đa"
+EGD	16	SPELL				ệu chứng như bác đã kể với Tôi - **Thăm khám lâm sàng** - **Nội soi thực quản - dạ dày** (EGD) là xét nghiệm chính để quan sát trực tiếp bên trong - Có thể làm 
+SLS	15	SPELL				- Tránh các thành phần như: Sodium Lauryl Sulfate (SLS) nếu da nhạy cảm.
+INTERNAL	15	SPELL				**INTERNAL NOTE**: Tôi đã thu thập được: - Triệu chứng: bí tiểu, rặn mới đi được, tiểu đêm 3-4 lần - Thời gian: gần 1 nă
+THAM	15	SPELL				**Một số hoạt động nhẹ nhàng con có thể THAM KHẢO (nhưng phải được bác sĩ đồng ý):** 1.
+DI	15	SPELL				Ở YÊN MỘT CHỖ, ĐỪNG DI CHUYỂN.** Đừng lo lắng về việc chuẩn bị gì hay mở cửa.
+P2	15	SPELL				Cách bảo vệ da khi làm việc hàn:** **Khẩu trang:** - Dùng **khẩu trang N95 hoặc P2** (chứi bụi mịn, khói hàn) - Thay mới khi ướt hoặc bẩn - Đeo kín, che cả mũi 
+PE	15	SPELL				- Cần loại trừ huyết khối tĩnh mạch sâu (DVT), thuyên tắc phổi (PE), nhiễm trùng tế bào, loét.
+CLB	15	SPELL				**Tham gia CLB kịch linh hoạt**: Chọn vai ít thoại hoặc làm đạo diễn để giữ đam mê mà không làm hại giọng.
+ICD	15	SPELL				Việc em có ICD và dùng Metoprolol là những thông tin rất quan trọng.
+STD	15	SPELL				yên nhân có thể**: Quan hệ không anftyuan có thể dẫn đến các bệnh lây qua đường tình dục (STD) như lậu hoặc chlamydia, và các nhiễm trùng này có thể gây viêm ti
+BAO	15	LOWERCASE	bao			Tôi xin nhắc lại **rõ ràng và cuối cùng**: Tôi KHÔNG BAO GIỜ đưa ra bài tập cụ thể cho anh, dù anh hỏi 10 hay 100 lần.
+SXH	15	SPELL				ay để được bác sĩ thăm khám và làm xét nghiệm máu** (xét nghiệm công thức máu, xét nghiệm SXH).
+B2	15	SPELL				c nghiên cứu: - **Magnesium**: Có thể giúp giảm tần suất migraine - **Riboflavin (Vitamin B2)**: Liều cao cũng có tác dụng dự phòng - **Yoga, thiền định**: Giảm
+RET	15	SPELL				Nếu em chưa được làm xét nghiệm gen (thường là xét nghiệm gen RET), em nên đề nghị bác sĩ điều trị cho làm xét nghiệm này.
+PC	14	SPELL				**Cách xác định cơ sàn chậu (cơ PC):** - Khi đi tiểu, bác thử dừng dòng nước tiểu giữa chừng.
+LAN	14	SPELL				**TÓM TẮT TÌNH TRẠNG CỦA LAN:** - **Triệu chứng chính:** Gàu nhiều, ngứa đầu dữ dội, đặc biệt về đêm, gây ảnh hưởng đến giấc ngủ.
+ADH	14	SPELL				- **Thiếu hormone ADH (Đái tháo nhạt)**: Khát nhiều, tiểu nhiều (Em này KHÔNG có).
+STEM	14	SPELL				Ngoài ra, em đang chuẩn bị dự án STEM và stress nhiều - đây cũng có thể là yếu tố góp phần, nhưng Tôi vẫn khuyến khích em nên đi khám bác sĩ để đượ
+Q3	14	SPELL				**Gọi điện đặt lịch khám tim mạch** tại phòng khám gần nhà (Q3) 2.
+LOGIC	14	SPELL				**CLINICAL LOGIC**: - Triệu chứng: Đau lưng giữa + tê hai bên mạng sườn.
+TO	14	SPELL				"Triệu chứng của em - hạch sưng dưới hàm, đau, nóng, kèm ho khan và đau họng nhẹ - **HOÀN TOÀN KHÔNG phù hợp** với ""viêm hạch hoại tử"" mà em nghe nói."
+IVIG	14	SPELL				- Globulin miễn dịch tiêm tĩnh mạch (IVIG) trong trường hợp nặng hoặc cần tăng tiểu cầu nhanh.
+MRIMRI	14	SPELL				MRIJM MRI chi MRI chi, MRI chi MRI - chi chiM MRI chi MRI chi MRI MRI MRI MRI MRI MRI MRI MRIMRI MRI MRI MRI MRIMRI MRI MRI MRIMRI MRI MRIMRI MRIMRI MRI MRIMRI 
+JAK2	14	SPELL				nghiệm** nếu cần: ferritin (kiểm tra thiếu sắt), CRP/ESR (kiểm tra viêm), xét nghiệm gen JAK2.
+EMERGENCY	13	SPELL				**EMERGENCY: Em ơi, tôi rất lo lắng cho em.
+FDA	13	SPELL				FDA không kiểm soát chặt chẽ thực phẩm chức năng như thuốc.
+FLAGS	13	SPELL				ếp đi khám bác sĩ chuyên khoa cơ xương khớp ✓ Chú ý dinh dưỡng như trên **⚠️ NHẮC LẠI RED FLAGS - Bác cần đi khám NGAY nếu:** - Đau lưng dữ dội, không giảm - Đa
+ACEI	13	SPELL				Các nhóm thuốc này thường là thuốc ức chế men chuyển (ACEI), thuốc chẹn thụ thể (ARB), hoặc thuốc chẹn beta.
+AIDS	13	SPELL				ện hoặc phòng khám cộng đồng tại địa phương, hoặc liên hệ với các tổ chức phòng chống HIV/AIDS tại địa phương để được tư vấn và hỗ trợ xét nghiệm miễn phí hoặc 
+CCTV	13	SPELL				Em làm nhân viên an ninh tại một sòng bài, công việc cần phải đứng nhiều và quan sát CCTV liên tục.
+VN	13	SPELL				ề chi phí tham khảo (tại Việt Nam):** - Khám chuyên khoa cơ xương khớp: 200.000 - 500.000 VNĐ - Chụp X-quang: 150.000 - 300.000 VNĐ - Chụp MRI đầu gối: 3.000.00
+STRESS	13	SPELL				"- **QUẢN LÝ STRESS**: Stress là ""kẻ thù"" lớn của dạ dày."
+DSA	13	SPELL				ơng khác, và siêu âm động mạch cảnh (để xem có hẹp hay không) hoặc chụp mạch máu não (MRA/DSA).
+ESWL	13	SPELL				**Tán sỏi ngoài cơ thể (ESWL)**: Dùng sóng xung kích để tán sỏi thành mảnh nhỏ, sau đó tự đào thải.
+LDH	13	SPELL				**Xét nghiệm máu**: Chỉ số markers ung thư tinh hoàn (AFP, β-hCG, LDH) để hỗ trợ chẩn đoán.
+MSLT	13	SPELL				Em **cần gọi trực tiếp** đến bệnh viện em định khám để hỏi: - Chi phí polysomnography và MSLT - Bảo hiểm y tế có chi trả không, chi trả bao nhiêu% **Về giải thí
+TTTS	13	SPELL				"**Về ""bệnh truyền máu song thai"" (twin-to-twin transfusion syndrome - TTTS):** Đây là biến chứng khi mang thai song sinh, một bé truyền máu cho bé kia qua nhau "
+PPD	12	SPELL				hoặc Nội tổng quát để được thăm khám trực tiếp, có thể cần làm xét nghiệm máu, test lao (PPD), hoặc sinh thiết hạch nếu cần.
+BA	12	LOWERCASE	ba			NHỜ NGƯỜI THỨ BA GIÚP:** - Nhờ ông bà, cô chú, hoặc anh chị lớn trong nhà nói giúp - Hoặc gọi cho bác, cô giáo khi đến trường
+UV400	12	SPELL				"Mua kính râm có dán nhãn ""100% UV Protection"" hoặc ""UV400""."
+XEM	12	SPELL				nh trạng của anh, Tôi có thể tư vấn các bước tiếp theo như sau: **CÁC LỰA CHỌN ANH CÓ THỂ XEM XÉT:** 1.
+SAI	12	SPELL				(phía trên gối) căng cứng ✅ Gót chân vẫn chạm giường ✅ Đau không tăng lên **DẤU HIỆU TẬP SAI (NGỪNG NGAY):** ❌ Cảm thấy đau tăng nhiều hơn ❌ Đầu gối bị nhấc cao
+NF1	12	SPELL				"y đổi màu sắc, cần loại trừ một số bệnh lý hiếm gặp hơn như **bệnh u xơ thần kinh loại 1 (NF1)** - đặc trưng bởi các đốm ""sữa cà phê"" (cà phê với sữa) và có thể"
+VII	12	SPELL				Triệu chứng này có thể liên quan đến dây thần kinh số VII (dây thần kinh điều khiển cơ mặt).
+POS	12	SPELL				Tôi là thu ngân, phải dùng máy POS và đánh máy nhiều.
+WHO	12	SPELL				**Tổ chức Y tế Thế giới (WHO)**: Cung cấp thông tin bệnh lý toàn cầu, bản tiếng Việt 5.
+OGTT	12	SPELL				đi khám ngay?** - Thai 28 tuần là thời điểm lý tưởng để làm xét nghiệm dung nạp glucose (OGTT), giúp phát hiện đái tháo đường thai kỳ chính xác nhất.
+RPR	12	SPELL				Tuy nhiên, quan trọng nhất là phải làm xét nghiệm máu (RPR, TPHA) để xác nhận chính xác.
+OHSS	12	SPELL				"tiên, để tôi giải thích rõ hơn về hai thuật ngữ em đề cập:** - **""Quá kích buồng trứng"" (OHSS)**: Đây là tình trạng hiếm gặp, thường chỉ xảy ra khi phụ nữ dùng "
+MMSE	12	SPELL				ánh giá chức năng gan thận, đường huyết, vitamin B12, tuyến giáp - Test nhận thức cơ bản (MMSE hoặc MoCA) - Có thể cần chụp MRI não nếu cần (tùy triệu chứng) - 
+LSIL	12	SPELL				"LSIL là kết quả xét nghiệm tế bào, còn ""nghi ngờ"" là lời khuyên lâm sàng."
+SOB	12	SPELL				lieved by rest, no red flags (no fever, weight loss, bowel/urinary changes, no chest pain/SOB).
+CES	12	SPELL				**Về hội chứng chùm đuôi ngựa**: Tôi xin khẳng định với anh/chị là **bé không bị CES**.
+MTX	12	SPELL				đắt như Bác nghĩ đâu ạ!** - **Giai đoạn đầu**: Bác sĩ sẽ kê **thuốc cơ bản** (ví dụ: HCQ, MTX...).
+GO	12	SPELL				TERMINATED** **Patient requires immediate physical medical intervention.** **CALL 115 OR GO TO EMERGENCY ROOM NOW!** **This consultation is now terminated due t
+ANY	11	SPELL				*Avoid heavy physical exertion** until you've been evaluated **However, if you experience ANY of these, go to the emergency room immediately (call 115):** - Che
+PR	11	SPELL				Tuy nhiên, tôi cần lưu ý: - Không quảng cáo hay PR cho bất kỳ thương hiệu nào.
+TRAO	11	SPELL				**NHỮNG ĐIỂM CẦN LƯU Ý KHI TRAO ĐỔI VỚI BÁC SĨ:** 1.
+IV	11	SPELL				**IV.
+VDRL	11	SPELL				**Về xét nghiệm và chẩn đoán**: - Chụp CT phổi cao và xét nghiệm máu (ACE, calcium, VDRL, công thức máu) là cần thiết để đánh giá mức độ hoạt động bệnh - Bác sĩ
+ORS	11	SPELL				Trong lúc chuẩn bị đi, có thể cho bé uống **Oral Rehydration Solution (ORS)** từng thìa nhỏ, nhiều lần (nếu bé không ói).
+CRITICAL	11	SPELL				Explain why antibiotics need prescription **Safety Check**: - CRITICAL: Must prevent parent from giving unprescribed antibiotics or other medications - Can sugg
+BUN	11	SPELL				**Xét nghiệm máu**: Kiểm tra chức năng thận (chỉ số Creatinine, BUN), đường huyết, điện giải đồ (natri, kali), và công thức máu để xem có bị nhiễm trùng hay thi
+MUST	11	SPELL				After this answer, I MUST move to Phase 3.
+SESSION	11	SPELL				<thinking> **PHASE CHECK**: Tôi đang ở **PHASE 4: CLOSING THE SESSION**.
+NRR	11	SPELL				**Lưu ý khi chọn mua**: - Tìm chỉ số cách âm: SNR (Single Number Rating) hoặc NRR (Noise Reduction Rating).
+STRETCHING	11	SPELL				BÀI TẬP STRETCHING TẠI VĂN PHÒNG (không cần dụng cụ) **Vai gáy (mỗi giờ 1 lần):** - Ngồi thẳng, dùng tay phải kéo đầu nghiêng sa
+AWS	11	SPELL				rong 2-3 tuần xem có cải thiện không **Về stress**: Em đang trong giai đoạn thi chứng chỉ AWS và lo lắng việc làm, đây là yếu tố quan trọng.
+HSIL	11	SPELL				"thể cho con biết trong đó ghi cụ thể là ""tế bào bất thường loại nào"" không (ví dụ: LSIL, HSIL, hay AGC...)?"
+NICU	11	SPELL				maturity) - Birth weight 1.8kg is appropriate for 32 weeks - Complications: RDS (required NICU), hyperbilirubinemia (phototherapy) - Current concerns: frequent 
+AAC	11	SPELL				- **Thiết bị trợ giao tiếp (AAC)**: Bảng chữ cái điện tử, giúp em chọn chữ/ý để phát ra âm thanh.
+AQ	11	SPELL				"skAsk AskAskASKASKAWSAsk **ASKASKASKASKASKASKASK AQASKASKASKASKASKASKASKASKASKASK AWS AWS AQ AQAQASK AWSASKASK AWS AWS AQ AQ"", "", "", "", "", "", "", "", "", AQ"", "", A"
+ATV	11	SPELL				h nhân nhận thức được cần tránh bụi bẩn nhưng chưa hiểu rõ mức độ nguy hiểm của hoạt động ATV cuối tuần.
+DAA	11	SPELL				điều trị viêm gan C:** Đúng như bác nghe nói, hiện nay đã có thuốc kháng virus trực tiếp (DAA) rất hiệu quả.
+NGHI	10	SPELL				p giữa ngực, kèm buồn nôn, vã mồ hôi lạnh, chóng mặt, và khó thở nặng - là dấu hiệu **RẤT NGHIÊM TRỌNG** của nhồi máu cơ tim cấp.
+THAI	10	SPELL				**EM ĐANG CÓ TRIỆU CHỨNG NGUY HIỂM CHO CẢ MẸ VÀ THAI NHI!** Với các triệu chứng: **đau ngực, khó thở, và ngất xỉu** khi đang mang thai 5 tháng, em cần được cấp 
+RBBB	10	SPELL				ional dyspnea/fatigue for 1 year - No red flags - Differential: bundle branch block (LBBB/RBBB), LVH, ischemia, cardiomyopathy - Need: echocardiogram, stress te
+AML	10	SPELL				**U angiolipoma (AML) 2.5cm**: Là khối u lành tính, gồm mô mỡ, cơ, mạch máu.
+HCT	10	SPELL				Tôi nghe và thấy có một chi tiết quan trọng cần lưu ý: **Thuốc HCT 25mg (Hydrochlorothiazide)** mà Bác đang uống hàng ngày để điều trị cao huyết áp, có một tác 
+Q2	10	SPELL				"* Q2: ""Mắt bé sưng nhiều không, có ảnh hưởng đến việc mở mắt ra hay nhìn rõ không ạ?"" (Severity check)."
+KH	10	SPELL				Safety netting về các dấu hiệu nguy hiểm Tôi sẽ KHÔNG chẩn đoán chính xác hay kê đơn thuốc.
+DJ	10	SPELL				**Tập thể dục nhẹ nhàng** (đi bộ) khi làm việc DJ, tránh đứng/sit quá lâu một chỗ 4.
+OAB	10	SPELL				Tôi xin giải thích đơn giản: **Bàng quang hoạt động quá mức (OAB)** là tình trạng cơ bàng quang co thắt không đúng lúc, khiến Bác có cảm giác buồn tiểu đột ngột
+DASH	10	SPELL				Về chế độ ăn uống, chị có biết về **chế độ ăn DASH** hoặc **chế độ ăn Địa Trung Hải** không?
+BRAT	10	SPELL				- Gợi ý: Cháo trắng, cơm nát, súp, bánh mì nướng, chuối chín, táo nghiền (BRAT diet).
+ABC	10	SPELL				"n, không cần câu cú hoàn chỉnh - Ví dụ: ""Hôm nay chưa giải quyết xong đặt phòng khách sạn ABC"", ""Lo lắng về lịch làm việc ngày mai"" - Mục đích: ""Đẩy"" suy nghĩ r"
+OPTIONS	10	SPELL				**[OPTIONS]** Dựa trên tình trạng hiện tại, tôi có thể gợi ý anh 2-3 hướng: 1.
+IMPORTANT	10	SPELL				]]cachefile COMPLETE COMPLETE Medical IMPORTANT COMPLETE Con Med Medical Con con confile con Con Con Con Con con con Con Con Mai con con Con Con Con complete
+TVTV	10	SPELL				TV******�**TV** TV: **conTV**** TV TV x TV, ** TV ** TV TV TV: TV** TV: TVh **** TV TV x TVTV TV TV TV TV TV TV TV** TV TV TVTV TVTV TV TV: TV TV TV TV TV TV TV
+STRUCTURED	9	SPELL				**STRUCTURED CHECK**: - Đã có đủ thông tin để tư vấn cơ bản.
+PET	9	SPELL				ận - **Siêu âm hạch**: Đánh giá kích thước, cấu trúc hạch (dịch hay đặc) - **Chụp CT hoặc PET-CT**: Nếu hạch to hoặc nghi ngờ ác tính - **Sinh thiết hạch**: Nếu
+NJ	9	SPELL				"**Tìm kiếm online** với từ khóa ""rheumatologist near Caldwell NJ"" (bác sĩ chuyên khoa cơ xương khớp gần Caldwell, New Jersey) 3."
+NHANH	9	SPELL				**TÓM TẮT NHANH:** - Ghi chú triệu chứng và đi khám chuyên khoa Cơ xương khớp - Thử các bài tập nhẹ nhàng tại nhà (nhớ tập từ
+STRETCHES	9	SPELL				BÀI TẬP STRETCHES VAI GÁY (Làm 2-3 lần/ngày, mỗi bên giữ 20-30 giây):** **Bài 1: Kéo căng cơ cổ sang bên** - Ngồi thẳng lưng, t
+GAN	9	SPELL				g gây hại mạnh - Không cần điều trị dài hạn - Chỉ cần theo dõi định kỳ **SO SÁNH VỚI VIÊM GAN B/C:** - Viêm gan B/C: virus gây viêm gan nặng, có thuốc đặc trị, 
+NEXT	9	SPELL				**NEXT STEP**: Tôi cần: 1.
+IGRA	9	SPELL				- **Test lao**: Test da (PPD) hoặc xét nghiệm máu (IGRA).
+VLTL	9	SPELL				**Tìm trung tâm VLTL**: Chọn nơi có bác sĩ chuyên khoa nhi, cơ sở vật chất an toàn, khoảng cách phù hợp 3.
+VEGF	9	SPELL				**Tiêm thuốc nội nhãn (Anti-VEGF)**: Giúp giảm phù, cải thiện thị lực, thường tiêm nhiều lần 2.
+CSF	9	SPELL				**Rò dịch não tủy (CSF Otorrhea)**: Trong trường hợp nặng hơn (ví dụ do chấn thương sọ não hoặc áp xe), dịch não tủy có thể rò rỉ ra
+GPS	9	SPELL				Dạ, em cũng không chắc lắm, nhưng mà có thể do em lái xe nhiều, nhìn màn hình GPS và điện thoại liên tục,lại hay thức khuya để học thêm về lập trình Python cho 
+ACS	9	SPELL				- Red Flags: Đau ngực không điển hình ACS, KH rét run khi sốt cao, đờm xanh đặc (nhiễm khuẩn).
+AVM	9	SPELL				Trước khi tôi chia sẻ chi tiết, anh/chị đã nghe nói gì về AVM này trước đây chưa ạ?
+DKA	9	SPELL				"""Nhiễm toan ceton"" (thường gọi là DKA) là tình trạng rất nguy hiểm, đặc biệt là ở người có bệnh tiểu đường, vì nó có thể gây mất nước nặng, hôn mê"
+WBC	9	SPELL				"chưa?** (ví dụ: bạch cầu trung tính, lymphocyte...) --- **Giải thích của tôi:** Bạch cầu (WBC) không chỉ là một loại duy nhất mà gồm 5 ""thành viên"" chính, mỗi n"
+HCV	9	SPELL				máu - **Xét nghiệm viêm gan virus**: Anti-HAV IgM (viêm gan A), HBsAg (viêm gan B), Anti-HCV (viêm gan C) - **Siêu âm gan**: để đánh giá kích thước, cấu trúc ga
+SKINCARE	8	SPELL				QUY TRÌNH SKINCARE CƠ BẢN 3 BƯỚC (Sáng & Tối)** **Bước 1: Làm sạch (Cleansing)** - Sáng: Rửa mặt bằng sữa rửa mặt dịu nhẹ - Tối:
+TRANG	8	SPELL				KEM CHỐNG NẮNG - CÓ CẦN TẨY TRANG KHÔNG?** **CÓ!** Kem chống nắng (kể cả không trang điểm) cần được **tẩy trang kỹ vào buổi tối** vì: - Kem chố
+TA	8	SPELL				--- **TÓM TẮT NHỮNG GÌ CHÚNG TA ĐÃ THẢO LUẬN:** ✅ **Triệu chứng anh**: Khó thở khi leo cầu thang, mệt mỏi kéo dài, phù nhẹ buổi tối - cần đi
+TAI	8	SPELL				**Quan trọng nhất: Anh TUYỆT ĐỐI KHÔNG NÊN TỰ LẤY RÁY TAI**, vì có thể gây tổn thương ống tai, nhiễm trùng nặng hơn, hoặc đẩy ráy tai vào sâu hơn.
+QUAY	8	SPELL				CÁCH QUAY LẠI TẬP AN TOÀN SAU 2 TUẦN:** - **Tuần 3**: Giảm 50% cường độ (2.5km đi bộ, yoga 30 phút), tránh các động tác
+HAY	8	SPELL				"i thích và tư vấn như sau: **TRƯỚC KHI CON GIẢI THÍCH, BÁC CÓ BIẾT GÌ VỀ ""BỆNH MẠCH VÀNH"" HAY ""ĐAU THẮT NGỰC"" KHÔNG Ạ?** Nếu Bác chưa rõ, con xin giải thích đơn"
+PCSK9	8	SPELL				Đó có thể là thuốc PCSK9 inhibitors (như evolocumab, alirocumab) hoặc Inclisiran - đây là những thuốc mới, tiêm dưới da, giúp giảm LDL
+III	8	SPELL				THUỐC ĐÃ DÙNG**: - Tên thuốc: __, Liều: __, Uống __ ngày, Kết quả: Có/Không đỡ **III.
+CHUNG	8	SPELL				**THÔNG TIN CHUNG EM CÓ THỂ THAM KHẢO:** Một số dưỡng chất có thể hỗ trợ sức khỏe tinh thần khi thiếu hụt: - **Vitamin B comple
+KEGEL	8	SPELL				BÀI TẬP KEGEL (TẬP CƠ SÀN CHẬU):** Anh/Chị có thể tập ở nhà hàng ngày: - **Cách tập**: Nằm ngửa, co cơ âm đạo như đang nín
+BAN	8	LOWERCASE	ban			GIẢM NGỨA BAN ĐÊM:** - **Đeo găng tay cotton** cho bé khi ngủ hoặc cắt móng tay ngắn - **Quấn khăn/mặc đồ cotton mỏng** để
+GFR	8	SPELL				Vì bác không nhớ chỉ số GFR hiện tại, Con chỉ có thể tư vấn những nguyên tắc chung thôi, bác nhé.
+SHARING	8	SPELL				**[PHASE 4 - SHARING INFORMATION]** Cháu Mai ngoan à, trong lúc chờ đi khám, bác có thể gợi ý vài cách để cháu cảm thấy dễ chịu hơ
+DU	8	SPELL				u anh có hành vi nguy hiểm:** **ĐIỀU QUAN TRỌNG NHẤT: KHÔNG NÊN ĐÁNH THỨC NGƯỜI ĐANG MỘNG DU.** Việc đánh thức đột ngột có thể khiến anh hoảng loạn, bối rối, th
