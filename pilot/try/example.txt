@@ -1,0 +1,12 @@
+# One utterance per line. Blank lines and lines starting with # are skipped.
+#
+#   modal run app.py::try_text --text-file pilot/try/example.txt --speaker VIVOSSPK22
+#
+# Output: FLAC + report.json in pilot/try_out/ (raw vs spoken text). Nothing is
+# uploaded. Lines under ~144 chars stay a single chunk, so to exercise chunk
+# joining and the 250 ms seams, write longer paragraphs — see test1..3.txt.
+Em sốt 39,5 độ từ chiều qua, người mệt mỏi và đau đầu nhiều.
+Uống Metformin 1000mg/ngày, chia 2 viên 500mg sau ăn.
+Huyết áp của bác là 140/90 mmHg, hơi cao so với bình thường.
+Mức độ đau khoảng 6-7/10, kéo dài 10-15 phút mỗi lần.
+Bác sĩ ơi, tình trạng này có nguy hiểm không ạ?
