@@ -14,7 +14,22 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
-VISEC="/Users/phananhtuannguyen/Desktop/Project/ASR-syntheticdata/data/ViSEC-processed/processed_audio_by_id"
+# ViSEC reference audio is NOT in this repo (~54 MB of WAVs). Set
+# MEDDIES_VISEC_DIR, or leave it and we search upward for data/ViSEC-processed/
+# — which finds it from a plain clone and from a git worktree alike, since a
+# worktree sits several levels below the project root.
+# Only needed when refs.source is "visec"; vivos pools come from `cli.py build-refs`.
+find_visec() {
+  [ -n "${MEDDIES_VISEC_DIR:-}" ] && { echo "$MEDDIES_VISEC_DIR"; return; }
+  local dir="$REPO_ROOT"
+  for _ in 1 2 3 4 5; do
+    [ -d "$dir/data/ViSEC-processed/processed_audio_by_id" ] && {
+      echo "$dir/data/ViSEC-processed/processed_audio_by_id"; return; }
+    dir="$(dirname "$dir")"
+  done
+  echo "$REPO_ROOT/data/ViSEC-processed/processed_audio_by_id"   # for the error message
+}
+VISEC="$(find_visec)"
 # Each VIVOS duration variant gets its own subdirectory on the one vivos-refs
 # Volume (/v10, /v30, ...), so switching variants never overwrites another and
 # refs.dir alone selects which one the container reads.
@@ -57,7 +72,7 @@ check_prereqs() {
     [ -d "$VIVOS" ] || die "VIVOS refs missing — run: python3 cli.py --config $CONFIG build-refs --dest pilot/refs_vivos"
     green "  refs pool: vivos ${REFS_SECONDS}s ($(ls "$VIVOS"/*.wav 2>/dev/null | wc -l | tr -d ' ') wav files)"
   else
-    [ -d "$VISEC" ] || die "ViSEC reference audio not found at $VISEC"
+    [ -d "$VISEC" ] || die "ViSEC reference audio not found at $VISEC\n  set MEDDIES_VISEC_DIR=/path/to/processed_audio_by_id, or use refs.source: vivos"
     green "  refs pool: visec ($(ls "$VISEC"/*.wav 2>/dev/null | wc -l | tr -d ' ') wav files)"
   fi
 

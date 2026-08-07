@@ -74,6 +74,10 @@ deleted locally as they finish, so a full run never needs the whole corpus on di
 
 ### Pilot and experiments
 
+ViSEC reference audio is not in the repo. `run_pilot.sh` searches upward for
+`data/ViSEC-processed/`, or set `MEDDIES_VISEC_DIR`. Only needed when
+`refs.source` is `visec` — the VIVOS pools are built by `cli.py build-refs`.
+
 ```bash
 ./pilot/run_pilot.sh setup            # volumes, uploads, image build — free, idempotent
 ./pilot/run_pilot.sh generate --yes   # the paid run (~$0.03)

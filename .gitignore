@@ -15,3 +15,6 @@ pilot/try_out*/
 
 # macOS
 .DS_Store
+
+# Run transcripts — machine-specific paths, regenerated every run.
+pilot/*.log
