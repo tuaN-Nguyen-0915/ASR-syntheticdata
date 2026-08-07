@@ -5,3 +5,13 @@ __pycache__/
 
 # Materialized reference pools — rebuild with `cli.py build-refs`, don't commit 22 MB of WAVs.
 pilot/refs_*/
+
+# Generated pilot audio — every file is regenerable from a published shard via
+# `run_pilot.sh verify` or the extraction in sweep_refs.sh. 433 MB of it was
+# committed by an over-broad `git add -A` and had to be purged from history.
+pilot/audio*/
+pilot/audio*.zip
+pilot/try_out*/
+
+# macOS
+.DS_Store
